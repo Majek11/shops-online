@@ -156,6 +156,7 @@ function ProductCard({ product }: { product: Product }) {
 export default function OurOffers() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [slideIndex, setSlideIndex] = useState(0);
     const pausedRef = useRef(false);
 
