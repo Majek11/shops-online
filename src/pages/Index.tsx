@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import ReferralBanner from "@/components/ReferralBanner";
 import ServiceCard from "@/components/ServiceCard";
+import OurOffers from "@/components/OurOffers";
 import PurchaseModal, { type PurchaseType } from "@/components/PurchaseModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -107,6 +108,15 @@ const Index = () => {
                   />
                 </motion.div>
               ))}
+            </motion.div>
+
+            {/* Our Offers — marketplace stores */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.45, ease: "easeOut" }}
+            >
+              <OurOffers />
             </motion.div>
           </motion.div>
         </div>
