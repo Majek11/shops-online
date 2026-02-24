@@ -144,6 +144,7 @@ export default function OurOffers() {
     const [current, setCurrent] = useState(0);
     const [paused, setPaused] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pausedRef = useRef(false);
 
     /* ── Visible cards per viewport ── */
     const getVisible = () => {
@@ -187,19 +188,23 @@ export default function OurOffers() {
         fetchPage(next, true);
     };
 
-    /* ── Autoplay ── */
+    /* ── Autoplay — ref-based so interval never goes stale ── */
     const maxIndex = Math.max(0, stores.length - visible);
+    const maxIndexRef = useRef(maxIndex);
+    useEffect(() => { maxIndexRef.current = maxIndex; }, [maxIndex]);
 
     const next = useCallback(() => {
-        setCurrent((c) => (c >= maxIndex ? 0 : c + 1));
-    }, [maxIndex]);
-
+        setCurrent((c) => (c >= maxIndexRef.current ? 0 : c + 1));
+    }, []);
 
     useEffect(() => {
-        if (paused || stores.length === 0) return;
-        timerRef.current = setInterval(next, AUTOPLAY_MS);
-        return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    }, [paused, next, stores.length]);
+        if (stores.length === 0) return;
+        const id = setInterval(() => {
+            if (!pausedRef.current) next();
+        }, AUTOPLAY_MS);
+        return () => clearInterval(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stores.length, next]);
 
     /* ── Translate offset ── */
     const cardW = 100 / visible;   // % width per card
@@ -250,8 +255,8 @@ export default function OurOffers() {
             {!loading && !error && stores.length > 0 && (
                 <div
                     className="relative"
-                    onMouseEnter={() => setPaused(true)}
-                    onMouseLeave={() => setPaused(false)}
+                    onPointerEnter={() => { setPaused(true); pausedRef.current = true; }}
+                    onPointerLeave={() => { setPaused(false); pausedRef.current = false; }}
                 >
                     {/* Track */}
                     <div className="overflow-hidden rounded-2xl">
