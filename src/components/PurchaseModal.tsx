@@ -114,6 +114,15 @@ const StepTransition = ({ children, stepKey }: { children: React.ReactNode; step
   </AnimatePresence>
 );
 
+/* ─── Shared network-logo helper ─── */
+const getNetworkLogo = (name: string) => {
+  if (name.toLowerCase().includes('mtn')) return mtnLogo;
+  if (name.toLowerCase().includes('airtel')) return airtelLogo;
+  if (name.toLowerCase().includes('glo')) return gloLogo;
+  if (name.toLowerCase().includes('9mobile') || name.toLowerCase().includes('etisalat')) return etisalatLogo;
+  return mtnLogo;
+};
+
 /* ─── Dynamic Network Dropdown Selector ─── */
 const NetworkSelect = ({ value, onChange, networks, loading, phoneValidation }: {
   value: string;
@@ -121,52 +130,42 @@ const NetworkSelect = ({ value, onChange, networks, loading, phoneValidation }: 
   networks: Operator[];
   loading: boolean;
   phoneValidation?: PhoneValidation | null;
-}) => {
-  const getNetworkLogo = (name: string) => {
-    if (name.toLowerCase().includes('mtn')) return mtnLogo;
-    if (name.toLowerCase().includes('airtel')) return airtelLogo;
-    if (name.toLowerCase().includes('glo')) return gloLogo;
-    if (name.toLowerCase().includes('9mobile') || name.toLowerCase().includes('etisalat')) return etisalatLogo;
-    return mtnLogo; // fallback
-  };
-
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Network</label>
-      <Select value={value} onValueChange={onChange} disabled={loading}>
-        <SelectTrigger className="rounded-lg">
-          <SelectValue placeholder={loading ? "Loading networks..." : "Choose Network"} />
-        </SelectTrigger>
-        <SelectContent>
-          {loading ? (
-            <SelectItem value="loading" disabled>
+}) => (
+  <div>
+    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Network</label>
+    <Select value={value} onValueChange={onChange} disabled={loading}>
+      <SelectTrigger className="rounded-lg">
+        <SelectValue placeholder={loading ? "Loading networks..." : "Choose Network"} />
+      </SelectTrigger>
+      <SelectContent>
+        {loading ? (
+          <SelectItem value="loading" disabled>
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </span>
+          </SelectItem>
+        ) : (
+          networks.map((network) => (
+            <SelectItem key={network.id} value={network.id}>
               <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
+                <img src={getNetworkLogo(network.name)} alt={network.name} className="h-5 w-5 rounded-full object-cover" />
+                {network.name}
               </span>
             </SelectItem>
-          ) : (
-            networks.map((network) => (
-              <SelectItem key={network.id} value={network.id}>
-                <span className="flex items-center gap-2">
-                  <img src={getNetworkLogo(network.name)} alt={network.name} className="h-5 w-5 rounded-full object-cover" />
-                  {network.name}
-                </span>
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
-      {/* Show "Detected" only when the API phone-validation has responded */}
-      {phoneValidation?.operator?.name && (
-        <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
-          <Check className="h-3 w-3" />
-          Detected: {phoneValidation.operator.name}
-        </p>
-      )}
-    </div>
-  );
-};
+          ))
+        )}
+      </SelectContent>
+    </Select>
+    {/* Show "Detected" only when the API phone-validation has responded */}
+    {phoneValidation?.operator?.name && (
+      <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+        <Check className="h-3 w-3" />
+        Detected: {phoneValidation.operator.name}
+      </p>
+    )}
+  </div>
+);
 
 const offers = [
   { name: "KFC Special", price: "N18,999", location: "KFC Magodo", discount: "20%" },
@@ -191,9 +190,9 @@ const OffersSlider = () => {
 
 
   return (
-    <div className="p-5">
+    <div className="p-5 bg-white rounded-b-2xl">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-bold text-foreground">Offers on Shops Online</h4>
+        <h4 className="text-sm font-bold text-gray-800">Offers on Shops Online</h4>
         <button className="text-xs font-semibold text-primary hover:underline transition-colors">
           more →
         </button>
@@ -210,7 +209,7 @@ const OffersSlider = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              className="flex-shrink-0 flex flex-col rounded-2xl overflow-hidden bg-background shadow-sm border border-border"
+              className="flex-shrink-0 flex flex-col rounded-2xl overflow-hidden bg-white shadow-md border border-gray-100"
               style={{ width: `calc(${100 / VISIBLE_CARDS}% - ${((VISIBLE_CARDS - 1) * 12) / VISIBLE_CARDS}px)` }}
             >
               <div className="relative h-24 overflow-hidden">
@@ -234,11 +233,11 @@ const OffersSlider = () => {
               </div>
               <div className="px-2 pb-2.5 pt-1">
                 <div className="flex items-baseline justify-between gap-1">
-                  <p className="text-[11px] font-medium text-foreground truncate">{offer.name}</p>
-                  <span className="text-xs font-extrabold text-foreground whitespace-nowrap">{offer.price}</span>
+                  <p className="text-[11px] font-medium text-gray-800 truncate">{offer.name}</p>
+                  <span className="text-xs font-extrabold text-gray-900 whitespace-nowrap">{offer.price}</span>
                 </div>
-                <p className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <span className="inline-block h-3 w-3 rounded-full bg-muted overflow-hidden text-[7px]">👤</span>
+                <p className="text-[9px] text-gray-500 flex items-center gap-1 mt-0.5">
+                  <span className="inline-block h-3 w-3 rounded-full bg-gray-200 overflow-hidden text-[7px]">👤</span>
                   {offer.location}
                 </p>
               </div>
@@ -249,6 +248,24 @@ const OffersSlider = () => {
     </div>
   );
 };
+
+const slideContent = [
+  {
+    title: <><span className="text-primary">Discover</span> Sellers, SMEs,<br />Professionals Across<br />Markets</>,
+    description: "OnShops.online is a growing digital directory of shops, SMEs, professionals, and service providers integrated into the digital economy across Africa.",
+    cta: "Visit Marketplace",
+  },
+  {
+    title: <><span className="text-primary">Recharge</span> Airtime & Data<br />Instantly,<br />Anytime</>,
+    description: "Top up your phone or a loved one's in seconds — MTN, Airtel, Glo, 9mobile — with a 1% loyalty bonus on every ₦1,000+ purchase.",
+    cta: "Buy Airtime Now",
+  },
+  {
+    title: <><span className="text-primary">Pay Bills</span> Without<br />Leaving<br />Your Seat</>,
+    description: "Electricity, cable TV, betting wallets and more — pay all your utility bills in one place and earn loyalty rewards on every transaction.",
+    cta: "Pay a Bill",
+  },
+];
 
 const PromoSidebar = () => {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -261,39 +278,60 @@ const PromoSidebar = () => {
   }, []);
 
   return (
-    <div className="hidden md:flex w-[420px] min-w-[420px] flex-col overflow-hidden rounded-l-2xl bg-card">
-      {/* Carousel section */}
-      <div className="relative flex-1 min-h-[340px] flex flex-col justify-end">
+    <div className="hidden md:flex w-[420px] min-w-[420px] flex-col overflow-hidden rounded-l-2xl bg-navy">
+      {/* Logo pinned at the top */}
+      <div className="relative z-20 flex items-center gap-2 px-6 pt-5 pb-3">
+        <img src={heroLogo} alt="ShopsOnline by FusPay" className="h-6 brightness-0 invert" />
+      </div>
+
+      {/* Carousel section — fills remaining space */}
+      <div className="relative flex-1 min-h-0 overflow-hidden">
         {slideImages.map((src, i) => (
-          <img
+          <motion.img
             key={i}
             src={src}
             alt=""
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeSlide ? "opacity-100" : "opacity-0"
-              }`}
+            className="absolute inset-0 h-full w-full object-cover"
+            animate={{ opacity: i === activeSlide ? 1 : 0 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
           />
         ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/60 to-transparent" />
-        <div className="relative z-10 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <img src={heroLogo} alt="ShopsOnline" className="h-6 brightness-0 invert" />
-          </div>
-          <h3 className="text-xl font-bold text-primary-foreground leading-tight mb-3">
-            <span className="text-primary">Discover</span> Sellers, SMEs,<br />
-            Professional Across<br />Markets
-          </h3>
-          <p className="text-xs text-primary-foreground/60 mb-4">
-            OnShops.online is a growing digital directory of shops, SMEs, professionals, and service providers integrated into the digital economy across Africa.
-          </p>
-          <button className="rounded-lg bg-primary px-5 py-2 text-xs font-medium text-primary-foreground">
-            Visit Marketplace
-          </button>
+        <div className="absolute inset-0 bg-gradient-to-t from-navy/95 via-navy/55 to-transparent" />
+
+        {/* Per-slide text — transitions with each slide */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSlide}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
+              <h3 className="text-xl font-bold text-primary-foreground leading-tight mb-2">
+                {slideContent[activeSlide].title}
+              </h3>
+              <p className="text-xs text-primary-foreground/65 mb-4 leading-relaxed">
+                {slideContent[activeSlide].description}
+              </p>
+              <button className="rounded-lg bg-primary px-5 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                {slideContent[activeSlide].cta}
+              </button>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Slide dots */}
           <div className="mt-4 flex gap-2">
             {slideImages.map((_, i) => (
-              <div
+              <motion.button
                 key={i}
-                className={`h-1.5 w-5 rounded-full transition-colors duration-300 ${i === activeSlide ? "bg-primary" : "bg-primary-foreground/30"
-                  }`}
+                onClick={() => setActiveSlide(i)}
+                animate={{
+                  width: i === activeSlide ? 24 : 8,
+                  backgroundColor: i === activeSlide ? "hsl(var(--primary))" : "rgba(255,255,255,0.3)",
+                }}
+                transition={{ duration: 0.3 }}
+                className="h-1.5 rounded-full"
               />
             ))}
           </div>
@@ -301,7 +339,7 @@ const PromoSidebar = () => {
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-border mx-4" />
+      <div className="h-px bg-white/10 mx-4" />
 
       {/* Offers section with slider */}
       <OffersSlider />
@@ -529,10 +567,13 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const [esimProvider, setEsimProvider] = useState("");
   const [esimPackage, setEsimPackage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Per-row debounce timers for bulk phone validation
+  const bulkPhoneTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // ── Bulk recharge state ──────────────────────────────────────────────────────
   const [isBulk, setIsBulk] = useState(false);
-  const [bulkNumbers, setBulkNumbers] = useState<string[]>([""]);  // one row per recipient
+  type BulkRecipient = { phone: string; network: string; amount: string };
+  const [bulkNumbers, setBulkNumbers] = useState<BulkRecipient[]>([{ phone: "", network: "", amount: "" }]);
 
   // ── Beneficiaries (persisted to localStorage) ────────────────────────────────
   const [beneficiaries, setBeneficiaries] = useState<{ name: string; phone: string }[]>(() => {
@@ -556,6 +597,54 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   };
 
   const isPhoneSaved = beneficiaries.some(b => b.phone === phone);
+
+  /**
+   * Auto-detect network for a single bulk row by calling validatePhoneNumber.
+   * Uses the same normalisation + fuzzy name matching as the single-recharge flow.
+   */
+  const validateBulkPhone = async (phoneVal: string, idx: number) => {
+    const digits = phoneVal.replace(/\D/g, "");
+    let msisdn: string;
+    if (digits.startsWith("234")) msisdn = digits;
+    else if (digits.startsWith("0")) msisdn = "234" + digits.slice(1);
+    else if (digits.length === 10) msisdn = "234" + digits;
+    else msisdn = digits;
+
+    try {
+      const result = await validatePhoneNumber(msisdn);
+      if (!result.success || !result.data?.operator) return;
+      const detectedOperator = result.data.operator;
+      const allNetworks = networks.length > 0 ? networks : [
+        { id: "mtn", name: "MTN Nigeria", currency: "NGN", prefixes: [] },
+        { id: "airtel", name: "Airtel Nigeria", currency: "NGN", prefixes: [] },
+        { id: "glo", name: "Glo Nigeria", currency: "NGN", prefixes: [] },
+        { id: "9mobile", name: "9mobile (Etisalat)", currency: "NGN", prefixes: [] },
+      ];
+      // 1. Exact id match
+      let matched = allNetworks.find(n => n.id === detectedOperator.id);
+      // 2. Fuzzy name match
+      if (!matched) {
+        const detName = detectedOperator.name.toLowerCase();
+        matched = allNetworks.find(n => {
+          const nn = n.name.toLowerCase();
+          if (detName.includes("mtn") && nn.includes("mtn")) return true;
+          if (detName.includes("airtel") && nn.includes("airtel")) return true;
+          if (detName.includes("glo") && nn.includes("glo")) return true;
+          if ((detName.includes("9mobile") || detName.includes("etisalat")) &&
+            (nn.includes("9mobile") || nn.includes("etisalat"))) return true;
+          return false;
+        });
+      }
+      if (!matched) return;
+      setBulkNumbers(prev => {
+        const rows = [...(prev as BulkRecipient[])];
+        if (rows[idx] && rows[idx].network !== matched!.id) {
+          rows[idx] = { ...rows[idx], network: matched!.id };
+        }
+        return rows;
+      });
+    } catch { /* silent */ }
+  };
 
   // API state
   const [loading, setLoading] = useState(false);
@@ -828,7 +917,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     setBettingPlatform(""); setBettingUserId("");
     setEsimCountry(""); setEsimProvider(""); setEsimPackage("");
     // Reset bulk
-    setIsBulk(false); setBulkNumbers([""]);
+    setIsBulk(false); setBulkNumbers([{ phone: "", network: "", amount: "" }]);
     setShowBeneficiaries(false);
     // Reset API state
     setNetworks([]); setDataTypes([]); setBillers([]); setPaymentPlans([]);
@@ -984,12 +1073,12 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
       >
         <DialogTitle className="sr-only">{config.title}</DialogTitle>
         <DialogDescription className="sr-only">{config.subtitle}</DialogDescription>
-        {/* Close icon — top-right corner, always inside the modal */}
+        {/* Close icon — fixed just outside the modal's left edge on desktop, inside on mobile */}
         <button
           onClick={handleClose}
-          className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-md border border-border hover:bg-muted transition-colors"
+          className="fixed top-3 left-3 md:top-5 md:left-auto md:right-[calc(95vw+10px)] z-[9999] flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
         >
-          <X className="h-5 w-5 text-foreground" />
+          <X className="h-5 w-5 text-gray-700" />
         </button>
         <div className="flex flex-col md:flex-row h-full overflow-hidden rounded-none md:rounded-2xl">
           <PromoSidebar />
@@ -1099,51 +1188,204 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       )}
                     </>
                   ) : (
-                    /* Bulk recharge — dynamic phone rows */
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-foreground">Phone Numbers</label>
-                      {bulkNumbers.map((num, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <Input
-                            placeholder={`Recipient ${idx + 1}`}
-                            value={num}
-                            onChange={(e) => {
-                              const updated = [...bulkNumbers];
-                              updated[idx] = e.target.value;
-                              setBulkNumbers(updated);
-                            }}
-                            className="rounded-lg flex-1"
-                          />
-                          {bulkNumbers.length > 1 && (
-                            <button
-                              onClick={() => setBulkNumbers(bulkNumbers.filter((_, i) => i !== idx))}
-                              className="text-muted-foreground hover:text-destructive p-2"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                    /* Bulk recharge — one row per recipient: phone | network | amount */
+                    <div className="space-y-3">
+                      {/* Column headers — desktop only */}
+                      <div className="hidden md:grid grid-cols-[1fr_1fr_1fr_32px] gap-2 items-center pb-1 border-b border-border">
+                        <span className="text-[11px] font-semibold text-muted-foreground">Phone Number</span>
+                        <span className="text-[11px] font-semibold text-muted-foreground text-center">Network</span>
+                        <span className="text-[11px] font-semibold text-muted-foreground text-center">Amount (₦)</span>
+                        <span />
+                      </div>
+
+                      <AnimatePresence>
+                        {(bulkNumbers as BulkRecipient[]).map((row, idx) => (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.2 }}
+                            className={[
+                              // Mobile: stacked card
+                              "rounded-xl border border-border bg-muted/30 p-3 space-y-2",
+                              // Desktop: inline grid row
+                              "md:p-0 md:space-y-0 md:bg-transparent md:border-none md:rounded-none",
+                              "md:grid md:grid-cols-[1fr_1fr_1fr_32px] md:gap-2 md:items-center",
+                            ].join(" ")}
+                          >
+                            {/* Mobile-only: recipient label + delete button */}
+                            <div className="flex items-center justify-between md:hidden">
+                              <span className="text-xs font-bold text-foreground">Recipient {idx + 1}</span>
+                              {(bulkNumbers as BulkRecipient[]).length > 1 && (
+                                <button
+                                  onClick={() => setBulkNumbers((bulkNumbers as BulkRecipient[]).filter((_, i) => i !== idx))}
+                                  className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Phone */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block md:hidden">Phone Number</label>
+                              <Input
+                                placeholder="e.g. 0803 123 4567"
+                                value={row.phone}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = [...(bulkNumbers as BulkRecipient[])];
+                                  updated[idx] = { ...updated[idx], phone: val };
+                                  setBulkNumbers(updated);
+                                  if (bulkPhoneTimers.current[idx]) clearTimeout(bulkPhoneTimers.current[idx]);
+                                  if (val.replace(/\D/g, "").length >= 10) {
+                                    bulkPhoneTimers.current[idx] = setTimeout(() => {
+                                      validateBulkPhone(val, idx);
+                                    }, 500);
+                                  }
+                                }}
+                                className="rounded-lg text-sm h-9 w-full"
+                              />
+                            </div>
+
+                            {/* Network */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block md:hidden">Network</label>
+                              <div className="relative w-full">
+                                <Select
+                                  value={row.network}
+                                  onValueChange={(v) => {
+                                    const updated = [...(bulkNumbers as BulkRecipient[])];
+                                    updated[idx] = { ...updated[idx], network: v };
+                                    setBulkNumbers(updated);
+                                  }}
+                                  disabled={networksLoading}
+                                >
+                                  <SelectTrigger className="w-full rounded-lg h-9 text-xs">
+                                    <SelectValue placeholder={networksLoading ? "Loading..." : "Choose Network"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {networksLoading ? (
+                                      <SelectItem value="loading" disabled>
+                                        <span className="flex items-center gap-2">
+                                          <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                                        </span>
+                                      </SelectItem>
+                                    ) : (
+                                      networks.map((n) => (
+                                        <SelectItem key={n.id} value={n.id}>
+                                          <span className="flex items-center gap-2">
+                                            <img src={getNetworkLogo(n.name)} alt={n.name} className="h-4 w-4 rounded-full object-cover" />
+                                            {n.name}
+                                          </span>
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                {row.network && row.phone.replace(/\D/g, "").length >= 10 && (
+                                  <span className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background" title="Auto-detected" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Amount */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block md:hidden">Amount (₦)</label>
+                              <Input
+                                placeholder="e.g. 500"
+                                value={row.amount}
+                                onChange={(e) => {
+                                  const updated = [...(bulkNumbers as BulkRecipient[])];
+                                  updated[idx] = { ...updated[idx], amount: e.target.value };
+                                  setBulkNumbers(updated);
+                                }}
+                                className="w-full rounded-lg text-sm h-9"
+                              />
+                            </div>
+
+                            {/* Delete — desktop only (mobile uses card header) */}
+                            {(bulkNumbers as BulkRecipient[]).length > 1 ? (
+                              <button
+                                onClick={() => setBulkNumbers((bulkNumbers as BulkRecipient[]).filter((_, i) => i !== idx))}
+                                className="hidden md:flex text-muted-foreground hover:text-destructive transition-colors p-1"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : <span className="hidden md:block" />}
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+
+                      {/* Add row */}
                       <button
-                        onClick={() => setBulkNumbers([...bulkNumbers, ""])}
+                        onClick={() => setBulkNumbers([...(bulkNumbers as BulkRecipient[]), { phone: "", network: "", amount: "" }])}
                         className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                       >
-                        <Plus className="h-3.5 w-3.5" /> Add another number
+                        <Plus className="h-3.5 w-3.5" /> Add another recipient
                       </button>
-                      <p className="text-xs text-muted-foreground">
-                        Total: ₦{((parseFloat(amount.replace(/[₦N,]/g, "")) || 0) * bulkNumbers.filter(Boolean).length).toLocaleString("en-NG")}
-                        {" "}across {bulkNumbers.filter(Boolean).length} recipient(s)
-                      </p>
+
+                      {/* Bulk PriceDisplay — stacks on mobile, side-by-side on sm+ */}
+                      {(() => {
+                        const rows = bulkNumbers as BulkRecipient[];
+                        const total = rows.reduce((sum, r) => sum + (parseFloat(r.amount.replace(/[₦N,]/g, "")) || 0), 0);
+                        const recipient1Amount = parseFloat((rows[0]?.amount || "0").replace(/[₦N,]/g, "")) || 0;
+                        const bonus = recipient1Amount >= 1000 ? Math.floor(recipient1Amount * 0.01) : 0;
+                        const recipient1Phone = rows[0]?.phone || "";
+                        return (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex flex-col sm:flex-row overflow-hidden rounded-xl shadow-lg ring-1 ring-border/50"
+                          >
+                            <div className="flex-1 bg-gradient-to-br from-navy to-navy/90 p-4">
+                              <p className="text-xs text-navy-foreground/60">You will Pay</p>
+                              <p className="text-2xl font-bold text-navy-foreground">
+                                ₦{total.toLocaleString("en-NG")}<span className="text-sm">.00</span>
+                              </p>
+                              <p className="text-[10px] text-navy-foreground/50 mt-0.5">
+                                {total < 1000 ? "Spend ₦1,000+ to unlock bonus" : `Across ${rows.filter(r => r.amount).length} recipient(s)`}
+                              </p>
+                            </div>
+                            <div className="flex-1 bg-gradient-to-br from-navy/85 to-navy/75 p-4">
+                              <p className="text-xs text-navy-foreground/60">You will get</p>
+                              <motion.p
+                                key={bonus}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                className="text-2xl font-bold text-navy-foreground"
+                              >
+                                ₦{(recipient1Amount + bonus).toLocaleString("en-NG")}<span className="text-sm">.00</span>
+                              </motion.p>
+                              {bonus > 0 ? (
+                                <p className="text-[10px] text-green-300 font-semibold mt-0.5">
+                                  🎁 +₦{bonus.toLocaleString("en-NG")} loyalty bonus (1%) on {recipient1Phone || "—"}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-navy-foreground/50 mt-0.5">
+                                  0% loyalty earned on this amount on {recipient1Phone || "recipient 1"}
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })()}
                     </div>
                   )}
 
-                  <NetworkSelect value={network} onChange={setNetwork} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
-                    <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
-                  </div>
-                  <AmountChips options={amountOptions} value={amount} onChange={setAmount} />
-                  <PriceDisplay amount={amount} />
+                  {!isBulk && (
+                    <>
+                      <NetworkSelect value={network} onChange={setNetwork} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
+                        <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
+                      </div>
+                      <AmountChips options={amountOptions} value={amount} onChange={setAmount} />
+                      <PriceDisplay amount={amount} />
+                    </>
+                  )}
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
                     <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
@@ -1153,11 +1395,15 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       onClick={() => handleProceed(() => setStep(2))}
                       className="flex-1 rounded-lg"
                       disabled={
-                        !network || !amount || !email || !fullName ||
-                        (isBulk ? bulkNumbers.filter(Boolean).length === 0 : !phone)
+                        !email || !fullName ||
+                        (isBulk
+                          ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length === 0
+                          : !phone || !network || !amount)
                       }
                     >
-                      {isBulk ? `Buy for ${bulkNumbers.filter(Boolean).length} recipient(s)` : "Buy Now"}
+                      {isBulk
+                        ? `Buy for ${(bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length} recipient(s)`
+                        : "Buy Now"}
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
