@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingBag, RefreshCw, Loader2, Star, Tag } from "lucide-react";
+import { ShoppingBag, RefreshCw, Star, Tag } from "lucide-react";
 
 const BASE = "https://fuspay-marketplace-api.fly.dev/api/v1";
 const BASE_LINK = "https://www.onshops.online/shops/all?type=Product";
@@ -156,11 +156,7 @@ function ProductCard({ product }: { product: Product }) {
 export default function OurOffers() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [error, setError] = useState(false);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
-    const [slideIndex, setSlideIndex] = useState(0);   // which group of cards
+    const [slideIndex, setSlideIndex] = useState(0);
     const pausedRef = useRef(false);
 
     /* Responsive: how many cards to show at once */
@@ -179,21 +175,18 @@ export default function OurOffers() {
 
     /* Fetch */
     const fetchPage = useCallback(async (pg: number, append = false) => {
-        append ? setLoadingMore(true) : setLoading(true);
+        append ? null : setLoading(true);
         setError(false);
         try {
             const res = await fetch(`${BASE}/products/public?page=${pg}&limit=${PAGE_SIZE}`);
             const json = await res.json();
             const list: Product[] = json.data?.data ?? [];
-            const lastPage: number = json.data?.lastpage ?? 1;
             const active = list.filter((p) => p.status === "PUBLISHED" && p.isVisible !== false);
             setProducts((prev) => append ? [...prev, ...active] : active);
-            setHasMore(pg < lastPage);
         } catch {
             setError(true);
         } finally {
             setLoading(false);
-            setLoadingMore(false);
         }
     }, []);
 
@@ -286,18 +279,17 @@ export default function OurOffers() {
                         ))}
                     </div>
 
-                    {/* Load more */}
-                    {hasMore && (
-                        <div className="flex justify-center mt-6">
-                            <button
-                                onClick={() => { const next = page + 1; setPage(next); fetchPage(next, true); }}
-                                disabled={loadingMore}
-                                className="flex items-center gap-2 text-sm font-bold text-primary border border-primary/30 rounded-full px-5 py-2.5 hover:bg-primary hover:text-primary-foreground transition-all disabled:opacity-60"
-                            >
-                                {loadingMore ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading...</> : <>Load More Products</>}
-                            </button>
-                        </div>
-                    )}
+                    {/* Load more → redirects to marketplace */}
+                    <div className="flex justify-center mt-6">
+                        <a
+                            href={BASE_LINK}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm font-bold text-primary border border-primary/30 rounded-full px-5 py-2.5 hover:bg-primary hover:text-primary-foreground transition-all"
+                        >
+                            Load More Products →
+                        </a>
+                    </div>
                 </div>
             )}
 
