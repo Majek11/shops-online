@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { registerUser, loginUser } from "@/lib/billstackApi";
+import { registerUser, otpLogin } from "@/lib/billstackApi";
 import { getOperators, getProducts, getCategories } from "@/lib/billstackPublicApi";
 import { validatePhoneNumber, validateAccount } from "@/lib/billstackValidationApi";
 
@@ -53,7 +53,6 @@ export function BillstackAuthDemo() {
   });
   const [loginData, setLoginData] = useState({
     email: '',
-    password: '',
   });
   const [registerResult, setRegisterResult] = useState<object | null>(null);
   const [loginResult, setLoginResult] = useState<object | null>(null);
@@ -76,7 +75,7 @@ export function BillstackAuthDemo() {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await loginUser(loginData);
+      const result = await otpLogin(loginData.email);
       setLoginResult(result);
     } catch (err) {
       setLoginResult(err as object);

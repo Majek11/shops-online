@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import ReferralBanner from "@/components/ReferralBanner";
@@ -26,6 +27,19 @@ const services = [
   { title: "Cable TV Subscription", description: "Don't miss family show, news update, renew your TV Cables", image: cableTvImg, modalType: "cabletv" as PurchaseType, bgColor: "#f0f3f5" },
 ];
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.09, delayChildren: 0.2 },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } },
+};
+
 const Index = () => {
   const [modalType, setModalType] = useState<ModalType>(null);
 
@@ -36,16 +50,30 @@ const Index = () => {
         {/* Main layout: Hero left, Referral + Services right */}
         <div className="flex flex-col lg:flex-row gap-6 mb-8">
           {/* Left column: Hero */}
-          <div className="lg:w-[38%] lg:shrink-0 animate-fade-in lg:sticky lg:top-8 lg:self-start">
+          <motion.div
+            className="lg:w-[38%] lg:shrink-0 lg:sticky lg:top-8 lg:self-start"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
+          >
             <HeroSection />
-          </div>
+          </motion.div>
 
           {/* Right column: Referral + Services */}
-          <div className="flex-1 flex flex-col gap-6 animate-fade-in" style={{ animationDelay: "0.1s", animationFillMode: "both" }}>
+          <motion.div
+            className="flex-1 flex flex-col gap-6"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.55, delay: 0.1, ease: "easeOut" }}
+          >
             <ReferralBanner />
 
             {/* Services header */}
-            <div>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+            >
               <div className="flex items-center gap-4 mb-1">
                 <h2 className="text-2xl font-bold text-foreground">Our Services</h2>
                 <Select defaultValue="nigeria">
@@ -59,12 +87,17 @@ const Index = () => {
                 </Select>
               </div>
               <p className="text-sm text-muted-foreground mb-4">Monitor your airtime, data, electricity, and cable payments</p>
-            </div>
+            </motion.div>
 
-            {/* Service cards grid */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {services.map((service, i) => (
-                <div key={service.title} className="animate-fade-in" style={{ animationDelay: `${0.08 * (i + 1)}s`, animationFillMode: "both" }}>
+            {/* Service cards grid — staggered entrance */}
+            <motion.div
+              className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {services.map((service) => (
+                <motion.div key={service.title} variants={cardVariants}>
                   <ServiceCard
                     title={service.title}
                     description={service.description}
@@ -72,10 +105,10 @@ const Index = () => {
                     bgColor={service.bgColor}
                     onClick={service.modalType ? () => setModalType(service.modalType) : undefined}
                   />
-                </div>
+                </motion.div>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
       </main>
       <PurchaseModal open={modalType !== null} onClose={() => setModalType(null)} type={modalType || "airtime"} />

@@ -201,18 +201,61 @@ export async function registerUser(payload: RegisterUserPayload): Promise<ApiRes
   }
 }
 
-export async function loginUser(payload: LoginPayload): Promise<ApiResponse> {
+/**
+ * Silently register a user during checkout.
+ * Requires email, phone, and full name.
+ */
+export async function guestRegister(email: string, phone: string, fullName: string): Promise<ApiResponse> {
+  const nameParts = fullName.trim().split(" ");
+  const firstName = nameParts[0] || "Guest";
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "User";
+
+  const payload = {
+    firstName,
+    lastName,
+    email,
+    phone,
+    country: "NG" // Optional: can be derived or passed if needed
+  };
   try {
-    const response = await api.post('/auth/login', payload);
-    const { token, ...userData } = response.data;
-    if (token) {
-      localStorage.setItem('billstack_token', token);
-    }
-    return { success: true, data: userData, token };
+    const response = await api.post('/auth/register/user', payload);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    // We intentionally don't throw an error here for silent registration.
+    // The API might return 400/409 if the email already exists, which is fine.
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Silent registration failed'
+    };
+  }
+}
+
+/** POST /auth/otp-login — sends a 6-digit OTP to the given email */
+export async function otpLogin(email: string): Promise<ApiResponse> {
+  try {
+    const response = await api.post('/auth/otp-login', { email });
+    return { success: true, data: response.data };
   } catch (error: any) {
     return {
       success: false,
-      message: error.response?.data?.message || 'Login failed'
+      message: error.response?.data?.message || 'Failed to send OTP'
+    };
+  }
+}
+
+/** POST /auth/verify-otp-login — verifies OTP token and logs the user in */
+export async function verifyOtpLogin(email: string, token: string): Promise<ApiResponse> {
+  try {
+    const response = await api.post('/auth/verify-otp-login', { email, token });
+    const { token: authToken, ...userData } = response.data;
+    if (authToken) {
+      localStorage.setItem('billstack_token', authToken);
+    }
+    return { success: true, data: userData, token: authToken };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Invalid or expired OTP'
     };
   }
 }

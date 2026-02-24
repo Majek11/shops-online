@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import logo from "@/assets/shopsonline-logo.svg";
 
 const Navbar = () => {
@@ -6,7 +7,9 @@ const Navbar = () => {
     <header className="border-b border-border bg-background">
       <div className="container mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <img src={logo} alt="ShopsOnline" className="h-8" />
+          <Link to="/">
+            <img src={logo} alt="ShopsOnline" className="h-8" />
+          </Link>
         </div>
 
         <nav className="hidden items-center gap-8 md:flex">
@@ -22,11 +25,11 @@ const Navbar = () => {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="rounded-lg">
-            Create Account
+          <Button variant="outline" size="sm" className="rounded-lg" asChild>
+            <Link to="/login">Create Account</Link>
           </Button>
-          <Button size="sm" className="rounded-lg">
-            Login
+          <Button size="sm" className="rounded-lg" asChild>
+            <Link to="/login">Login</Link>
           </Button>
         </div>
       </div>

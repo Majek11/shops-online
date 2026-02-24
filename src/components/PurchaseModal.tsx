@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, Plus, PartyPopper, X, Loader2 } from "lucide-react";
+import { Check, Plus, PartyPopper, X, Loader2, Bookmark, BookmarkCheck, Users, UserPlus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import slide1 from "@/assets/slide-1.png";
 import slide2 from "@/assets/slide-2.png";
@@ -27,6 +27,7 @@ import {
   getESimPackages,
   validatePhoneNumber,
   validateAccount,
+  guestRegister,
   type Operator,
   type Product,
   type PaymentPlan,
@@ -308,33 +309,69 @@ const PromoSidebar = () => {
   );
 };
 
-/* ─── Enhanced PriceDisplay with elevation ─── */
+/* ─── Loyalty bonus helper — 1% of amount, only for purchases ≥ ₦1000 ─── */
+const calcBonus = (rawAmount: string): number => {
+  const n = parseFloat(rawAmount.replace(/[₦N$,\s]/g, ""));
+  if (!n || isNaN(n) || n < 1000) return 0;
+  return Math.floor(n * 0.01);
+};
+
+/* ─── Enhanced PriceDisplay with real-time loyalty bonus ─── */
 const PriceDisplay = ({ amount }: { amount: string }) => {
-  const displayAmount = amount ? amount.replace("N", "") : "10,000";
+  const rawNum = parseFloat(amount.replace(/[₦N$,\s]/g, "")) || 0;
+  const bonus = calcBonus(amount);
+  const totalGet = rawNum + bonus;
+  const hasBonus = bonus > 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex overflow-hidden rounded-xl shadow-lg ring-1 ring-border/50"
     >
+      {/* Left — what the user pays */}
       <div className="flex-1 bg-gradient-to-br from-navy to-navy/90 p-4">
         <p className="text-xs text-navy-foreground/60">You will Pay</p>
         <p className="text-2xl font-bold text-navy-foreground">
-          N{displayAmount}<span className="text-sm">.00</span>
+          ₦{rawNum.toLocaleString("en-NG")}<span className="text-sm">.00</span>
         </p>
+        {!hasBonus && (
+          <p className="text-[10px] text-navy-foreground/50 mt-0.5">
+            Spend ₦1,000+ to unlock bonus
+          </p>
+        )}
       </div>
+
+      {/* Right — what the user gets (amount + bonus) */}
       <div className="flex-1 bg-gradient-to-br from-navy/85 to-navy/75 p-4">
         <p className="text-xs text-navy-foreground/60">You will get</p>
-        <p className="text-2xl font-bold text-navy-foreground">
-          N{displayAmount}<span className="text-sm">.00</span>
-        </p>
-        <p className="text-[10px] text-navy-foreground/50">
-          Loyalty Bonus Gift to you (0.5%: N50.0 Airtime to you)
-        </p>
+        <motion.p
+          key={totalGet}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          className="text-2xl font-bold text-navy-foreground"
+        >
+          ₦{totalGet.toLocaleString("en-NG")}<span className="text-sm">.00</span>
+        </motion.p>
+        {hasBonus ? (
+          <motion.p
+            key={bonus}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[10px] text-green-300 font-semibold mt-0.5"
+          >
+            🎁 Includes +₦{bonus.toLocaleString("en-NG")} loyalty bonus (1%)
+          </motion.p>
+        ) : (
+          <p className="text-[10px] text-navy-foreground/50 mt-0.5">
+            0% loyalty earned on this amount
+          </p>
+        )}
       </div>
     </motion.div>
   );
 };
+
 
 /* ─── Enhanced Amount Chips with micro-interactions ─── */
 const AmountChips = ({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) => (
@@ -473,6 +510,8 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const [dataType, setDataType] = useState("");
   const [plan, setPlan] = useState("");
   const [coupon, setCoupon] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [billerName, setBillerName] = useState("");
   const [paymentType, setPaymentType] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
@@ -490,6 +529,33 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const [esimProvider, setEsimProvider] = useState("");
   const [esimPackage, setEsimPackage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Bulk recharge state ──────────────────────────────────────────────────────
+  const [isBulk, setIsBulk] = useState(false);
+  const [bulkNumbers, setBulkNumbers] = useState<string[]>([""]);  // one row per recipient
+
+  // ── Beneficiaries (persisted to localStorage) ────────────────────────────────
+  const [beneficiaries, setBeneficiaries] = useState<{ name: string; phone: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem("beneficiaries") || "[]"); } catch { return []; }
+  });
+  const [showBeneficiaries, setShowBeneficiaries] = useState(false);
+
+  const saveBeneficiary = () => {
+    if (!phone || !fullName) return;
+    const exists = beneficiaries.some(b => b.phone === phone);
+    if (exists) return;
+    const updated = [...beneficiaries, { name: fullName, phone }];
+    setBeneficiaries(updated);
+    localStorage.setItem("beneficiaries", JSON.stringify(updated));
+  };
+
+  const removeBeneficiary = (ph: string) => {
+    const updated = beneficiaries.filter(b => b.phone !== ph);
+    setBeneficiaries(updated);
+    localStorage.setItem("beneficiaries", JSON.stringify(updated));
+  };
+
+  const isPhoneSaved = beneficiaries.some(b => b.phone === phone);
 
   // API state
   const [loading, setLoading] = useState(false);
@@ -599,9 +665,23 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
         const result = await validatePhoneNumber(msisdn);
         if (result.success && result.data) {
           setPhoneValidation(result.data);
-          const operatorId = result.data?.operator?.id;
-          if (operatorId) {
-            const matched = networks.find((n) => n.id === operatorId);
+          const detectedOperator = result.data?.operator;
+          if (detectedOperator) {
+            // 1. Try exact ID match
+            let matched = networks.find((n) => n.id === detectedOperator.id);
+            // 2. Fallback: fuzzy name match (handles MTN Nigeria vs mtn-ng etc.)
+            if (!matched) {
+              const detName = detectedOperator.name.toLowerCase();
+              matched = networks.find((n) => {
+                const nn = n.name.toLowerCase();
+                if (detName.includes("mtn") && nn.includes("mtn")) return true;
+                if (detName.includes("airtel") && nn.includes("airtel")) return true;
+                if (detName.includes("glo") && nn.includes("glo")) return true;
+                if ((detName.includes("9mobile") || detName.includes("etisalat")) &&
+                  (nn.includes("9mobile") || nn.includes("etisalat"))) return true;
+                return false;
+              });
+            }
             if (matched) setNetwork(matched.id);
           }
         }
@@ -739,7 +819,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const reset = () => {
     setStep(1);
     setPhone(""); setNetwork(""); setAmount("");
-    setDataType(""); setPlan(""); setCoupon("");
+    setDataType(""); setPlan(""); setCoupon(""); setEmail(""); setFullName("");
     setBillerName(""); setPaymentType(""); setMeterNumber("");
     setGiftCardCategory(""); setGiftCardCountry("");
     setGiftCardSubCategory(""); setGiftCardAmount("");
@@ -747,6 +827,9 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     setCableProvider(""); setCablePlan(""); setDecoderNumber("");
     setBettingPlatform(""); setBettingUserId("");
     setEsimCountry(""); setEsimProvider(""); setEsimPackage("");
+    // Reset bulk
+    setIsBulk(false); setBulkNumbers([""]);
+    setShowBeneficiaries(false);
     // Reset API state
     setNetworks([]); setDataTypes([]); setBillers([]); setPaymentPlans([]);
     setPackages([]); setProviders([]); setValidatedAccount(null);
@@ -794,36 +877,43 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     switch (type) {
       case "airtime":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Network:", value: selectedNetwork?.name || network || "—" },
           { label: "Phone Number:", value: phone || "—" },
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "data":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Network:", value: selectedNetwork?.name || network || "—" },
           { label: "Data Plan:", value: selectedPlan?.name || plan || "—" },
           { label: "Phone Number:", value: phone || "—" },
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "electricity":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Biller Name:", value: billers.find((b) => b.id === billerName)?.name || billerName || "—" },
           { label: "Account Name:", value: validatedAccount?.customerName || "Not validated" },
-          { label: "Payment Type:", value: paymentType || "—" },
           { label: "Meter Number:", value: meterNumber || "—" },
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "cabletv":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Provider:", value: selectedCableProvider?.name || cableProvider || "—" },
           { label: "Account Name:", value: validatedAccount?.customerName || "Not validated" },
           { label: "Plan:", value: selectedCablePlan?.name || cablePlan || "—" },
@@ -831,58 +921,77 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "giftcard":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Category:", value: giftCardCategory || "—" },
           { label: "Country:", value: giftCardCountry || "—" },
           { label: "Type:", value: giftCardSubCategory || "—" },
           { label: "Amount:", value: `₦${(giftCardAmount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(giftCardAmount) > 0 ? `+₦${calcBonus(giftCardAmount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "betting":
         return [
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
           { label: "Platform:", value: bettingPlatform || "—" },
           { label: "User ID:", value: bettingUserId || "—" },
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
           { label: "Date & Time:", value: new Date().toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
       case "esim":
         return [
-          { label: "Country:", value: esimCountry === "NG" ? "🇳🇬 Nigeria" : esimCountry === "GH" ? "🇬🇭 Ghana" : esimCountry === "KE" ? "🇰🇪 Kenya" : esimCountry === "ZA" ? "�� South Africa" : esimCountry || "—" },
+          { label: "Name:", value: fullName || "—" },
+          { label: "Email:", value: email || "—" },
+          { label: "Country:", value: esimCountry === "NG" ? "🇳🇬 Nigeria" : esimCountry === "GH" ? "🇬🇭 Ghana" : esimCountry === "KE" ? "🇰🇪 Kenya" : esimCountry === "ZA" ? "🇿🇦 South Africa" : esimCountry || "—" },
           { label: "Service Provider:", value: selectedEsimProvider?.name || esimProvider || "—" },
           { label: "Package:", value: selectedEsimPkg?.name || esimPackage || "—" },
           { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N$]/g, "")}` },
           { label: "Phone Number:", value: phone || "—" },
           { label: "Stamp Duty:", value: "₦25.00" },
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
-          { label: "Bonus to earn:", value: "₦20" },
+          { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
     }
+  };
+
+  /**
+   * Handle silent background registration using email and phone
+   */
+  const handleProceed = (action: () => void) => {
+    if (email) {
+      // Find the best phone number available (depending on flow)
+      const phoneParam = phone || meterNumber || decoderNumber || bettingUserId || "+2340000000000";
+      // Fire and forget - don't block the UI
+      guestRegister(email, phoneParam, fullName).catch(console.error);
+    }
+    action();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
         aria-describedby={undefined}
-        className="fixed right-0 top-0 md:top-4 md:bottom-4 left-auto translate-x-0 translate-y-0 max-w-6xl w-full md:w-[90vw] p-0 md:p-4 gap-0 overflow-visible rounded-none md:rounded-2xl h-screen md:h-[calc(100vh-2rem)] max-h-screen md:max-h-[calc(100vh-2rem)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 border-r-0 [&>button:last-of-type]:hidden"
+        className="fixed right-0 top-0 md:top-4 md:bottom-4 left-auto translate-x-0 translate-y-0 max-w-7xl w-full md:w-[95vw] p-0 md:p-4 gap-0 overflow-hidden rounded-none md:rounded-2xl h-screen md:h-[calc(100vh-2rem)] max-h-screen md:max-h-[calc(100vh-2rem)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 border-r-0 [&>button:last-of-type]:hidden"
       >
         <DialogTitle className="sr-only">{config.title}</DialogTitle>
         <DialogDescription className="sr-only">{config.subtitle}</DialogDescription>
-        {/* Close icon in a circle at top-left edge of the modal */}
+        {/* Close icon — top-right corner, always inside the modal */}
         <button
           onClick={handleClose}
-          className="absolute left-3 top-3 md:-left-5 md:-top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-md border border-border hover:bg-muted transition-colors"
+          className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-md border border-border hover:bg-muted transition-colors"
         >
           <X className="h-5 w-5 text-foreground" />
         </button>
-        <div className="flex flex-col md:flex-row h-full">
+        <div className="flex flex-col md:flex-row h-full overflow-hidden rounded-none md:rounded-2xl">
           <PromoSidebar />
 
           <div className="flex-1 p-6 pt-16 md:p-10 overflow-y-auto">
@@ -907,9 +1016,127 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
               <StepTransition stepKey="airtime-1">
                 <div className="space-y-4">
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
-                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
                   </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+
+                  {/* ── Bulk / Single toggle ── */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setIsBulk(false); setBulkNumbers([""]); }}
+                      className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-all ${!isBulk ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary"
+                        }`}
+                    >
+                      Single Recharge
+                    </button>
+                    <button
+                      onClick={() => setIsBulk(true)}
+                      className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${isBulk ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary"
+                        }`}
+                    >
+                      <Users className="h-3.5 w-3.5" /> Bulk Recharge
+                    </button>
+                  </div>
+
+                  {!isBulk ? (
+                    <>
+                      {/* Single phone + beneficiary */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-sm font-semibold text-foreground">Phone Number</label>
+                          <div className="flex gap-2">
+                            {beneficiaries.length > 0 && (
+                              <button
+                                onClick={() => setShowBeneficiaries(v => !v)}
+                                className="text-xs text-primary font-medium flex items-center gap-1 hover:underline"
+                              >
+                                <Bookmark className="h-3 w-3" /> Beneficiaries
+                              </button>
+                            )}
+                            {phone && fullName && (
+                              <button
+                                onClick={isPhoneSaved ? undefined : saveBeneficiary}
+                                className={`text-xs font-medium flex items-center gap-1 ${isPhoneSaved ? "text-green-600 cursor-default" : "text-primary hover:underline"
+                                  }`}
+                              >
+                                {isPhoneSaved ? <BookmarkCheck className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                                {isPhoneSaved ? "Saved" : "Save"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                      </div>
+
+                      {/* Beneficiary quick-select */}
+                      {showBeneficiaries && beneficiaries.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="rounded-xl border border-border bg-muted/40 p-3 space-y-2"
+                        >
+                          <p className="text-xs font-semibold text-muted-foreground">Saved Beneficiaries</p>
+                          {beneficiaries.map((b) => (
+                            <div key={b.phone} className="flex items-center justify-between">
+                              <button
+                                onClick={() => { setPhone(b.phone); setFullName(b.name); setShowBeneficiaries(false); }}
+                                className="flex-1 text-left"
+                              >
+                                <p className="text-sm font-semibold text-foreground">{b.name}</p>
+                                <p className="text-xs text-muted-foreground">{b.phone}</p>
+                              </button>
+                              <button onClick={() => removeBeneficiary(b.phone)} className="text-muted-foreground hover:text-destructive p-1">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </>
+                  ) : (
+                    /* Bulk recharge — dynamic phone rows */
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-foreground">Phone Numbers</label>
+                      {bulkNumbers.map((num, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <Input
+                            placeholder={`Recipient ${idx + 1}`}
+                            value={num}
+                            onChange={(e) => {
+                              const updated = [...bulkNumbers];
+                              updated[idx] = e.target.value;
+                              setBulkNumbers(updated);
+                            }}
+                            className="rounded-lg flex-1"
+                          />
+                          {bulkNumbers.length > 1 && (
+                            <button
+                              onClick={() => setBulkNumbers(bulkNumbers.filter((_, i) => i !== idx))}
+                              className="text-muted-foreground hover:text-destructive p-2"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setBulkNumbers([...bulkNumbers, ""])}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add another number
+                      </button>
+                      <p className="text-xs text-muted-foreground">
+                        Total: ₦{((parseFloat(amount.replace(/[₦N,]/g, "")) || 0) * bulkNumbers.filter(Boolean).length).toLocaleString("en-NG")}
+                        {" "}across {bulkNumbers.filter(Boolean).length} recipient(s)
+                      </p>
+                    </div>
+                  )}
+
                   <NetworkSelect value={network} onChange={setNetwork} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
@@ -918,12 +1145,19 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   <AmountChips options={amountOptions} value={amount} onChange={setAmount} />
                   <PriceDisplay amount={amount} />
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!phone || !network || !amount}>
-                      Buy Now
+                    <Button
+                      onClick={() => handleProceed(() => setStep(2))}
+                      className="flex-1 rounded-lg"
+                      disabled={
+                        !network || !amount || !email || !fullName ||
+                        (isBulk ? bulkNumbers.filter(Boolean).length === 0 : !phone)
+                      }
+                    >
+                      {isBulk ? `Buy for ${bulkNumbers.filter(Boolean).length} recipient(s)` : "Buy Now"}
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
@@ -936,9 +1170,126 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
               <StepTransition stepKey="data-1">
                 <div className="space-y-4">
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
-                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
                   </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+
+                  {/* ── Bulk / Single toggle ── */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setIsBulk(false); setBulkNumbers([""]); }}
+                      className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-all ${!isBulk ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary"
+                        }`}
+                    >
+                      Single Recharge
+                    </button>
+                    <button
+                      onClick={() => setIsBulk(true)}
+                      className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${isBulk ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary"
+                        }`}
+                    >
+                      <Users className="h-3.5 w-3.5" /> Bulk Recharge
+                    </button>
+                  </div>
+
+                  {!isBulk ? (
+                    <>
+                      {/* Single phone + beneficiary */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-sm font-semibold text-foreground">Phone Number</label>
+                          <div className="flex gap-2">
+                            {beneficiaries.length > 0 && (
+                              <button
+                                onClick={() => setShowBeneficiaries(v => !v)}
+                                className="text-xs text-primary font-medium flex items-center gap-1 hover:underline"
+                              >
+                                <Bookmark className="h-3 w-3" /> Beneficiaries
+                              </button>
+                            )}
+                            {phone && fullName && (
+                              <button
+                                onClick={isPhoneSaved ? undefined : saveBeneficiary}
+                                className={`text-xs font-medium flex items-center gap-1 ${isPhoneSaved ? "text-green-600 cursor-default" : "text-primary hover:underline"
+                                  }`}
+                              >
+                                {isPhoneSaved ? <BookmarkCheck className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                                {isPhoneSaved ? "Saved" : "Save"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                      </div>
+
+                      {/* Beneficiary quick-select */}
+                      {showBeneficiaries && beneficiaries.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="rounded-xl border border-border bg-muted/40 p-3 space-y-2"
+                        >
+                          <p className="text-xs font-semibold text-muted-foreground">Saved Beneficiaries</p>
+                          {beneficiaries.map((b) => (
+                            <div key={b.phone} className="flex items-center justify-between">
+                              <button
+                                onClick={() => { setPhone(b.phone); setFullName(b.name); setShowBeneficiaries(false); }}
+                                className="flex-1 text-left"
+                              >
+                                <p className="text-sm font-semibold text-foreground">{b.name}</p>
+                                <p className="text-xs text-muted-foreground">{b.phone}</p>
+                              </button>
+                              <button onClick={() => removeBeneficiary(b.phone)} className="text-muted-foreground hover:text-destructive p-1">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </>
+                  ) : (
+                    /* Bulk recharge — dynamic phone rows */
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-foreground">Phone Numbers</label>
+                      {bulkNumbers.map((num, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <Input
+                            placeholder={`Recipient ${idx + 1}`}
+                            value={num}
+                            onChange={(e) => {
+                              const updated = [...bulkNumbers];
+                              updated[idx] = e.target.value;
+                              setBulkNumbers(updated);
+                            }}
+                            className="rounded-lg flex-1"
+                          />
+                          {bulkNumbers.length > 1 && (
+                            <button
+                              onClick={() => setBulkNumbers(bulkNumbers.filter((_, i) => i !== idx))}
+                              className="text-muted-foreground hover:text-destructive p-2"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setBulkNumbers([...bulkNumbers, ""])}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add another number
+                      </button>
+                      <p className="text-xs text-muted-foreground">
+                        {bulkNumbers.filter(Boolean).length} recipient(s) selected
+                      </p>
+                    </div>
+                  )}
+
                   <NetworkSelect value={network} onChange={(v) => { setNetwork(v); setDataType(""); setPlan(""); setPackages([]); setAmount(""); }} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Data Type</label>
@@ -957,7 +1308,6 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                         ) : (
                           dataTypes.map((dt) => (
                             <SelectItem key={dt.category_id} value={dt.category_id}>
-                              {/* Strip the "Mobile Data > " prefix for a cleaner label */}
                               {dt.name.replace(/^Mobile Data > /, "")}
                             </SelectItem>
                           ))
@@ -971,7 +1321,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       setPlan(value);
                       const selectedPackage = packages.find(p => p.id === value);
                       if (selectedPackage) {
-                        setAmount(selectedPackage.price.operator);
+                        setAmount(selectedPackage.price.user || selectedPackage.price.operator);
                       }
                     }} disabled={!dataType || packages.length === 0}>
                       <SelectTrigger className="rounded-lg">
@@ -993,7 +1343,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                         ) : (
                           packages.map((pkg) => (
                             <SelectItem key={pkg.id} value={pkg.id}>
-                              {pkg.name} - ₦{pkg.price.operator}
+                              {pkg.name} — ₦{pkg.price.user || pkg.price.operator}
                             </SelectItem>
                           ))
                         )}
@@ -1002,18 +1352,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <PriceDisplay amount={amount} />
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!phone || !network || !plan}>
-                      Buy Now
+                    <Button
+                      onClick={() => handleProceed(() => setStep(2))}
+                      className="flex-1 rounded-lg"
+                      disabled={
+                        !network || !plan || !email || !fullName ||
+                        (isBulk ? bulkNumbers.filter(Boolean).length === 0 : !phone)
+                      }
+                    >
+                      {isBulk ? `Buy for ${bulkNumbers.filter(Boolean).length} recipient(s)` : "Buy Now"}
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
                 </div>
               </StepTransition>
             )}
+
 
             {/* ==================== ELECTRICITY - Step 1 ==================== */}
             {type === "electricity" && step === 1 && (
@@ -1049,6 +1407,10 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     )}
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Meter Number</label>
                     <Input
                       placeholder="Enter Meter Number"
@@ -1059,14 +1421,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => {
+                      onClick={() => handleProceed(() => {
                         if (paymentPlans.length > 0) {
                           validateAccountNumber(meterNumber, paymentPlans[0].id);
                         }
                         setStep(2);
-                      }}
+                      })}
                       className="flex-1 rounded-lg"
-                      disabled={!billerName || !meterNumber || loading}
+                      disabled={!billerName || !meterNumber || loading || !email || !fullName}
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Validate Meter Number
@@ -1113,8 +1475,8 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <PriceDisplay amount={amount} />
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button onClick={() => setStep(3)} className="flex-1 rounded-lg" disabled={!amount}>
@@ -1155,8 +1517,8 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     </Select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!cableProvider}>
@@ -1230,21 +1592,25 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       className="rounded-lg"
                     />
                   </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
                   <PriceDisplay amount={amount || "10000"} />
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => {
+                      onClick={() => handleProceed(() => {
                         if (cablePlan) {
                           validateAccountNumber(decoderNumber, cablePlan);
                         }
                         setStep(3);
-                      }}
+                      })}
                       className="flex-1 rounded-lg"
-                      disabled={!cablePlan || !decoderNumber}
+                      disabled={!cablePlan || !decoderNumber || !email || !fullName}
                     >
                       Buy Now
                     </Button>
@@ -1360,11 +1726,15 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter Email" className="rounded-lg" />
+                    <Input placeholder="Enter Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg">Proceed</Button>
+                    <Button onClick={() => handleProceed(() => setStep(3))} className="flex-1 rounded-lg" disabled={!phone || !email || !fullName}>Proceed</Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
                 </div>
@@ -1392,17 +1762,25 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter User ID" value={bettingUserId} onChange={(e) => setBettingUserId(e.target.value)} className="rounded-lg" />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Enter Amount</label>
                     <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
                   </div>
                   <AmountChips options={bettingAmountOptions} value={amount} onChange={setAmount} />
                   <PriceDisplay amount={amount} />
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg">Next</Button>
+                    <Button onClick={() => handleProceed(() => setStep(2))} className="flex-1 rounded-lg" disabled={!bettingUserId || !amount || !email || !fullName}>Next</Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
                 </div>
@@ -1438,8 +1816,8 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     </Select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
-                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
+                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!esimCountry}>
@@ -1500,6 +1878,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Available Package</label>
                     <Select value={esimPackage} onValueChange={(value) => {
                       setEsimPackage(value);
@@ -1539,7 +1925,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     {amount ? <>Total: <span className="font-semibold text-foreground">${amount}</span> USD</> : null}
                   </p>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg" disabled={!esimProvider || !esimPackage || !phone}>
+                    <Button onClick={() => handleProceed(() => setStep(3))} className="flex-1 rounded-lg" disabled={!esimProvider || !esimPackage || !phone || !email || !fullName}>
                       Proceed
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>

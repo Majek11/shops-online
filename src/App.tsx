@@ -11,6 +11,7 @@ import TransactionsHistory from "./pages/dashboard/TransactionsHistory";
 import BillsPayments from "./pages/dashboard/BillsPayments";
 import ReferAndEarn from "./pages/dashboard/ReferAndEarn";
 import MyAccount from "./pages/dashboard/MyAccount";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="transactions" element={<TransactionsHistory />} />
