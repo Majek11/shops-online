@@ -10,13 +10,8 @@ export interface RegisterUserPayload {
   phone: string;
   country: string;
   lastName: string;
-  password: string;
   firstName: string;
-}
-
-export interface LoginPayload {
-  email: string;
-  password: string;
+  // NOTE: no password — this API uses passwordless OTP auth
 }
 
 export interface ApiResponse<T = any> {
@@ -192,11 +187,16 @@ api.interceptors.response.use(
 export async function registerUser(payload: RegisterUserPayload): Promise<ApiResponse> {
   try {
     const response = await api.post('/auth/register/user', payload);
-    return { success: true, data: response.data };
+    const envelope = response.data;
+    return {
+      success: envelope?.status === true,
+      data: envelope?.data,
+      message: envelope?.message,
+    };
   } catch (error: any) {
     return {
       success: false,
-      message: error.response?.data?.message || 'Registration failed'
+      message: error.response?.data?.message || 'Registration failed',
     };
   }
 }
@@ -210,22 +210,20 @@ export async function guestRegister(email: string, phone: string, fullName: stri
   const firstName = nameParts[0] || "Guest";
   const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "User";
 
-  const payload = {
-    firstName,
-    lastName,
-    email,
-    phone,
-    country: "NG" // Optional: can be derived or passed if needed
-  };
+  const payload = { firstName, lastName, email, phone, country: "NG" };
   try {
     const response = await api.post('/auth/register/user', payload);
-    return { success: true, data: response.data };
+    const envelope = response.data;
+    return {
+      success: envelope?.status === true,
+      data: envelope?.data,
+      message: envelope?.message,
+    };
   } catch (error: any) {
-    // We intentionally don't throw an error here for silent registration.
-    // The API might return 400/409 if the email already exists, which is fine.
+    // 400/409 = email already exists, which is expected on repeat checkouts
     return {
       success: false,
-      message: error.response?.data?.message || 'Silent registration failed'
+      message: error.response?.data?.message || 'Silent registration failed',
     };
   }
 }
@@ -234,41 +232,85 @@ export async function guestRegister(email: string, phone: string, fullName: stri
 export async function otpLogin(email: string): Promise<ApiResponse> {
   try {
     const response = await api.post('/auth/otp-login', { email });
-    return { success: true, data: response.data };
+    const envelope = response.data;
+    // NOTE: In sandbox mode the API returns the OTP in data.token
+    // This lets Login.tsx auto-fill in dev/test environments
+    return {
+      success: envelope?.status === true || response.status === 200,
+      data: envelope?.data,             // includes { email, token: 'XXXX' } in sandbox
+      token: envelope?.data?.token,     // the OTP itself (sandbox only)
+      message: envelope?.message,
+    };
   } catch (error: any) {
     return {
       success: false,
-      message: error.response?.data?.message || 'Failed to send OTP'
+      message: error.response?.data?.message || 'Failed to send OTP. Please check your email address.',
     };
   }
 }
 
-/** POST /auth/verify-otp-login — verifies OTP token and logs the user in */
+/**
+ * POST /auth/verify-otp-login — verifies OTP `token` and logs the user in.
+ * API response envelope: { status, message, data: { token, user: {...} } }
+ * or: { status, message, token, data: { ...user } }
+ */
 export async function verifyOtpLogin(email: string, token: string): Promise<ApiResponse> {
   try {
     const response = await api.post('/auth/verify-otp-login', { email, token });
-    const { token: authToken, ...userData } = response.data;
+    const envelope = response.data;
+
+    // Handle both possible response shapes from the API:
+    // Shape A: { status, message, data: { token: '...', ...user } }
+    // Shape B: { status, message, token: '...', data: { ...user } }
+    const authToken: string | undefined =
+      envelope?.data?.token ||
+      envelope?.token ||
+      undefined;
+
+    const userData = envelope?.data
+      ? (envelope.data.token ? { ...envelope.data, token: undefined } : envelope.data)
+      : envelope;
+
     if (authToken) {
       localStorage.setItem('billstack_token', authToken);
+      localStorage.setItem('billstack_user', JSON.stringify(userData));
     }
-    return { success: true, data: userData, token: authToken };
+
+    const success = envelope?.status === true || !!authToken;
+
+    return {
+      success,
+      data: userData,
+      token: authToken,
+      message: envelope?.message,
+    };
   } catch (error: any) {
     return {
       success: false,
-      message: error.response?.data?.message || 'Invalid or expired OTP'
+      message: error.response?.data?.message || 'Invalid or expired OTP. Please try again.',
     };
   }
 }
 
 export function logout() {
   localStorage.removeItem('billstack_token');
+  localStorage.removeItem('billstack_user');
 }
 
-export function getToken() {
+export function getToken(): string | null {
   return localStorage.getItem('billstack_token');
 }
 
-export function isAuthenticated() {
+export function getUser<T = any>(): T | null {
+  try {
+    const raw = localStorage.getItem('billstack_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isAuthenticated(): boolean {
   return !!getToken();
 }
 

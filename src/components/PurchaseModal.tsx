@@ -1378,6 +1378,10 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
               <StepTransition stepKey="electricity-1">
                 <div className="space-y-4">
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Electricity Biller</label>
                     <Select value={billerName} onValueChange={setBillerName} disabled={networksLoading}>
                       <SelectTrigger className="rounded-lg">
@@ -1400,11 +1404,6 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                         )}
                       </SelectContent>
                     </Select>
-                    {billerName && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Payment plan will be loaded automatically after selecting biller.
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
@@ -1493,6 +1492,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
               <StepTransition stepKey="cabletv-1">
                 <div className="space-y-4">
                   <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
+                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Provider</label>
                     <Select value={cableProvider} onValueChange={setCableProvider} disabled={loading}>
                       <SelectTrigger className="rounded-lg">
@@ -1521,7 +1528,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!cableProvider}>
+                    <Button onClick={() => handleProceed(() => setStep(2))} className="flex-1 rounded-lg" disabled={!cableProvider || !fullName || !email}>
                       Proceed
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
@@ -1555,7 +1562,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       setCablePlan(value);
                       const selectedPlan = paymentPlans.find(p => p.id === value);
                       if (selectedPlan) {
-                        setAmount(selectedPlan.price.operator || "0");
+                        setAmount(selectedPlan.price.user || selectedPlan.price.operator || "0");
                       }
                     }} disabled={paymentPlans.length === 0}>
                       <SelectTrigger className="rounded-lg">
@@ -1574,9 +1581,9 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                             </span>
                           </SelectItem>
                         ) : (
-                          paymentPlans.map((plan) => (
-                            <SelectItem key={plan.id} value={plan.id}>
-                              {plan.name} - ₦{plan.price.operator}
+                          paymentPlans.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name} — ₦{p.price.user || p.price.operator}
                             </SelectItem>
                           ))
                         )}
@@ -1584,7 +1591,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     </Select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Decoder Number</label>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Decoder / Smart Card Number</label>
                     <Input
                       placeholder="Enter Decoder Number"
                       value={decoderNumber}
@@ -1592,15 +1599,13 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       className="rounded-lg"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
-                  </div>
-                  <PriceDisplay amount={amount || "10000"} />
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Referral Code (Optional)</label>
-                    <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
-                  </div>
+                  <PriceDisplay amount={amount || "0"} />
+                  {validatedAccount && (
+                    <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
+                      <p className="text-sm text-success font-medium">✓ Account Validated</p>
+                      <p className="text-xs text-muted-foreground">Customer: {validatedAccount.customerName}</p>
+                    </div>
+                  )}
                   <div className="flex gap-3 pt-2">
                     <Button
                       onClick={() => handleProceed(() => {
@@ -1610,18 +1615,12 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                         setStep(3);
                       })}
                       className="flex-1 rounded-lg"
-                      disabled={!cablePlan || !decoderNumber || !email || !fullName}
+                      disabled={!cablePlan || !decoderNumber}
                     >
                       Buy Now
                     </Button>
-                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                    <Button variant="outline" onClick={() => setStep(1)} className="rounded-lg px-8">Go Back</Button>
                   </div>
-                  {validatedAccount && (
-                    <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
-                      <p className="text-sm text-success font-medium">✓ Account Validated</p>
-                      <p className="text-xs text-muted-foreground">Customer: {validatedAccount.customerName}</p>
-                    </div>
-                  )}
                 </div>
               </StepTransition>
             )}

@@ -54,7 +54,15 @@ export default function Login() {
         if (res.success) {
             setStep("otp");
             startResendTimer();
-            setTimeout(() => otpRefs.current[0]?.focus(), 150);
+            // Sandbox: API returns the OTP directly in data.token — auto-fill the boxes
+            if (res.token) {
+                const digits = String(res.token).padStart(6, "0").slice(0, 6).split("");
+                setOtp(digits);
+                // Auto-submit after a short delay so the user can see the boxes fill
+                setTimeout(() => handleVerifyWithToken(digits.join("")), 800);
+            } else {
+                setTimeout(() => otpRefs.current[0]?.focus(), 150);
+            }
         } else {
             setError(res.message || "Failed to send OTP. Please try again.");
         }
@@ -321,8 +329,8 @@ export default function Login() {
                                         onClick={handleResend}
                                         disabled={resendTimer > 0 || loading}
                                         className={`font-semibold transition-colors ${resendTimer > 0
-                                                ? "text-muted-foreground cursor-default"
-                                                : "text-primary hover:underline cursor-pointer"
+                                            ? "text-muted-foreground cursor-default"
+                                            : "text-primary hover:underline cursor-pointer"
                                             }`}
                                     >
                                         {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend code"}
