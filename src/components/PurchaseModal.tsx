@@ -1,0 +1,1591 @@
+import { useState, useEffect, useRef } from "react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Check, Plus, PartyPopper, X, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import slide1 from "@/assets/slide-1.png";
+import slide2 from "@/assets/slide-2.png";
+import slide3 from "@/assets/slide-3.png";
+import heroLogo from "@/assets/shopsonline-logo.svg";
+import foodOfferImg from "@/assets/food-offer.jpg";
+import mtnLogo from "@/assets/mtn.jpg";
+import airtelLogo from "@/assets/airtel.png";
+import gloLogo from "@/assets/glo.png";
+import etisalatLogo from "@/assets/etisalat.jpg";
+import {
+  getAirtimeNetworks,
+  getDataNetworks,
+  getDataTypes,
+  getDataPlans,
+  getElectricityBillers,
+  getElectricityPaymentPlans,
+  getCableTvBillers,
+  getCableTvPaymentPlans,
+  getESimProviders,
+  getESimPackages,
+  validatePhoneNumber,
+  validateAccount,
+  type Operator,
+  type Product,
+  type PaymentPlan,
+  type PhoneValidation,
+  type SubCategory
+} from "@/lib/billstackApi";
+
+const slideImages = [slide1, slide2, slide3];
+
+export type PurchaseType = "airtime" | "data" | "electricity" | "giftcard" | "cabletv" | "betting" | "esim";
+
+interface PurchaseModalProps {
+  open: boolean;
+  onClose: () => void;
+  type: PurchaseType;
+}
+
+/* ─── Step Labels ─── */
+const getStepLabels = (type: PurchaseType): string[] => {
+  switch (type) {
+    case "airtime": return ["Details", "Confirm", "Done"];
+    case "data": return ["Details", "Confirm", "Done"];
+    case "betting": return ["Details", "Confirm", "Done"];
+    case "electricity": return ["Info", "Amount", "Confirm", "Done"];
+    case "giftcard": return ["Card", "Contact", "Confirm", "Done"];
+    case "cabletv": return ["Provider", "Plan", "Confirm", "Done"];
+    case "esim": return ["Country", "Package", "Confirm", "Done"];
+  }
+};
+
+/* ─── Step Indicator with labels ─── */
+const StepIndicator = ({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: string[] }) => (
+  <div className="flex items-center justify-between mb-8">
+    {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step, i) => (
+      <div key={step} className="flex items-center flex-1">
+        <div className="flex flex-col items-center gap-1">
+          <motion.div
+            initial={false}
+            animate={{
+              scale: currentStep === step ? 1.1 : 1,
+              backgroundColor: currentStep >= step ? "hsl(var(--primary))" : "transparent",
+            }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${currentStep >= step
+              ? "text-primary-foreground"
+              : "border-2 border-border text-muted-foreground"
+              }`}
+          >
+            {currentStep > step ? <Check className="h-4 w-4" /> : step}
+          </motion.div>
+          <span className={`text-[10px] font-medium ${currentStep >= step ? "text-primary" : "text-muted-foreground"}`}>
+            {labels[i]}
+          </span>
+        </div>
+        {i < totalSteps - 1 && (
+          <div className="flex-1 mx-2 mt-[-16px]">
+            <motion.div
+              className="h-0.5 bg-primary origin-left"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: currentStep > step ? 1 : 0 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              style={{ backgroundColor: currentStep > step ? "hsl(var(--primary))" : "hsl(var(--border))" }}
+            />
+            <div className="h-0.5 bg-border -mt-0.5" />
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+);
+
+/* ─── Animated Step Wrapper ─── */
+const StepTransition = ({ children, stepKey }: { children: React.ReactNode; stepKey: string }) => (
+  <AnimatePresence mode="wait">
+    <motion.div
+      key={stepKey}
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+    >
+      {children}
+    </motion.div>
+  </AnimatePresence>
+);
+
+/* ─── Dynamic Network Dropdown Selector ─── */
+const NetworkSelect = ({ value, onChange, networks, loading, phoneValidation }: {
+  value: string;
+  onChange: (v: string) => void;
+  networks: Operator[];
+  loading: boolean;
+  phoneValidation?: PhoneValidation | null;
+}) => {
+  const getNetworkLogo = (name: string) => {
+    if (name.toLowerCase().includes('mtn')) return mtnLogo;
+    if (name.toLowerCase().includes('airtel')) return airtelLogo;
+    if (name.toLowerCase().includes('glo')) return gloLogo;
+    if (name.toLowerCase().includes('9mobile') || name.toLowerCase().includes('etisalat')) return etisalatLogo;
+    return mtnLogo; // fallback
+  };
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Network</label>
+      <Select value={value} onValueChange={onChange} disabled={loading}>
+        <SelectTrigger className="rounded-lg">
+          <SelectValue placeholder={loading ? "Loading networks..." : "Choose Network"} />
+        </SelectTrigger>
+        <SelectContent>
+          {loading ? (
+            <SelectItem value="loading" disabled>
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </span>
+            </SelectItem>
+          ) : (
+            networks.map((network) => (
+              <SelectItem key={network.id} value={network.id}>
+                <span className="flex items-center gap-2">
+                  <img src={getNetworkLogo(network.name)} alt={network.name} className="h-5 w-5 rounded-full object-cover" />
+                  {network.name}
+                </span>
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+      {/* Show "Detected" only when the API phone-validation has responded */}
+      {phoneValidation?.operator?.name && (
+        <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+          <Check className="h-3 w-3" />
+          Detected: {phoneValidation.operator.name}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const offers = [
+  { name: "KFC Special", price: "N18,999", location: "KFC Magodo", discount: "20%" },
+  { name: "Jollof Rice Combo", price: "N12,500", location: "Foodie Hub", discount: "15%" },
+  { name: "Shawarma Deluxe", price: "N8,999", location: "Wrap King", discount: "20%" },
+  { name: "Pepper Soup", price: "N6,500", location: "Mama's Kitchen", discount: "10%" },
+  { name: "Suya Platter", price: "N15,000", location: "Suya Spot VI", discount: "25%" },
+];
+
+const VISIBLE_CARDS = 3;
+
+const OffersSlider = () => {
+  const [offset, setOffset] = useState(0);
+  const maxOffset = offers.length - VISIBLE_CARDS;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOffset((o) => (o >= maxOffset ? 0 : o + 1));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [maxOffset]);
+
+
+  return (
+    <div className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-bold text-foreground">Offers on Shops Online</h4>
+        <button className="text-xs font-semibold text-primary hover:underline transition-colors">
+          more →
+        </button>
+      </div>
+      <div className="overflow-hidden">
+        <motion.div
+          className="flex gap-3"
+          animate={{ x: `-${offset * (100 / VISIBLE_CARDS + 2.4)}%` }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        >
+          {offers.map((offer, i) => (
+            <motion.div
+              key={offer.name}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="flex-shrink-0 flex flex-col rounded-2xl overflow-hidden bg-background shadow-sm border border-border"
+              style={{ width: `calc(${100 / VISIBLE_CARDS}% - ${((VISIBLE_CARDS - 1) * 12) / VISIBLE_CARDS}px)` }}
+            >
+              <div className="relative h-24 overflow-hidden">
+                <img src={foodOfferImg} alt={offer.name} className="h-full w-full object-cover" />
+                <div className="absolute top-2 right-2 flex items-center justify-center">
+                  <svg viewBox="0 0 60 60" className="h-10 w-10 drop-shadow-md">
+                    <polygon
+                      points="30,2 35,18 52,12 42,26 58,30 42,34 52,48 35,42 30,58 25,42 8,48 18,34 2,30 18,26 8,12 25,18"
+                      fill="hsl(var(--primary))"
+                    />
+                  </svg>
+                  <span className="absolute text-[8px] font-bold text-primary-foreground leading-tight text-center">
+                    {offer.discount}<br />Off
+                  </span>
+                </div>
+              </div>
+              <div className="px-2 pt-2 pb-1">
+                <button className="w-full rounded-full bg-primary py-1.5 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
+                  Grab now
+                </button>
+              </div>
+              <div className="px-2 pb-2.5 pt-1">
+                <div className="flex items-baseline justify-between gap-1">
+                  <p className="text-[11px] font-medium text-foreground truncate">{offer.name}</p>
+                  <span className="text-xs font-extrabold text-foreground whitespace-nowrap">{offer.price}</span>
+                </div>
+                <p className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <span className="inline-block h-3 w-3 rounded-full bg-muted overflow-hidden text-[7px]">👤</span>
+                  {offer.location}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+const PromoSidebar = () => {
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % slideImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="hidden md:flex w-[420px] min-w-[420px] flex-col overflow-hidden rounded-l-2xl bg-card">
+      {/* Carousel section */}
+      <div className="relative flex-1 min-h-[340px] flex flex-col justify-end">
+        {slideImages.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeSlide ? "opacity-100" : "opacity-0"
+              }`}
+          />
+        ))}
+        <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/60 to-transparent" />
+        <div className="relative z-10 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <img src={heroLogo} alt="ShopsOnline" className="h-6 brightness-0 invert" />
+          </div>
+          <h3 className="text-xl font-bold text-primary-foreground leading-tight mb-3">
+            <span className="text-primary">Discover</span> Sellers, SMEs,<br />
+            Professional Across<br />Markets
+          </h3>
+          <p className="text-xs text-primary-foreground/60 mb-4">
+            OnShops.online is a growing digital directory of shops, SMEs, professionals, and service providers integrated into the digital economy across Africa.
+          </p>
+          <button className="rounded-lg bg-primary px-5 py-2 text-xs font-medium text-primary-foreground">
+            Visit Marketplace
+          </button>
+          <div className="mt-4 flex gap-2">
+            {slideImages.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 w-5 rounded-full transition-colors duration-300 ${i === activeSlide ? "bg-primary" : "bg-primary-foreground/30"
+                  }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="h-px bg-border mx-4" />
+
+      {/* Offers section with slider */}
+      <OffersSlider />
+    </div>
+  );
+};
+
+/* ─── Enhanced PriceDisplay with elevation ─── */
+const PriceDisplay = ({ amount }: { amount: string }) => {
+  const displayAmount = amount ? amount.replace("N", "") : "10,000";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex overflow-hidden rounded-xl shadow-lg ring-1 ring-border/50"
+    >
+      <div className="flex-1 bg-gradient-to-br from-navy to-navy/90 p-4">
+        <p className="text-xs text-navy-foreground/60">You will Pay</p>
+        <p className="text-2xl font-bold text-navy-foreground">
+          N{displayAmount}<span className="text-sm">.00</span>
+        </p>
+      </div>
+      <div className="flex-1 bg-gradient-to-br from-navy/85 to-navy/75 p-4">
+        <p className="text-xs text-navy-foreground/60">You will get</p>
+        <p className="text-2xl font-bold text-navy-foreground">
+          N{displayAmount}<span className="text-sm">.00</span>
+        </p>
+        <p className="text-[10px] text-navy-foreground/50">
+          Loyalty Bonus Gift to you (0.5%: N50.0 Airtime to you)
+        </p>
+      </div>
+    </motion.div>
+  );
+};
+
+/* ─── Enhanced Amount Chips with micro-interactions ─── */
+const AmountChips = ({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) => (
+  <div className="flex flex-wrap gap-2">
+    {options.map((opt) => (
+      <motion.button
+        key={opt}
+        onClick={() => onChange(opt)}
+        whileHover={{ scale: 1.08, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        className={`rounded-full border px-4 py-1.5 text-xs font-medium transition-colors ${value === opt
+          ? "border-primary bg-primary/10 text-primary shadow-md shadow-primary/20"
+          : "border-border text-muted-foreground hover:border-primary"
+          }`}
+      >
+        {opt}
+      </motion.button>
+    ))}
+  </div>
+);
+
+/* ─── Confetti Particles ─── */
+const ConfettiParticle = ({ delay, x, color }: { delay: number; x: number; color: string }) => (
+  <motion.div
+    className="absolute rounded-full"
+    style={{ width: 8, height: 8, backgroundColor: color, left: `${x}%`, top: "40%" }}
+    initial={{ opacity: 1, y: 0, scale: 1 }}
+    animate={{
+      opacity: [1, 1, 0],
+      y: [0, -80, 60],
+      x: [0, (Math.random() - 0.5) * 100],
+      rotate: [0, 360],
+      scale: [1, 1.2, 0.5],
+    }}
+    transition={{ duration: 1.8, delay, ease: "easeOut" }}
+  />
+);
+
+const confettiColors = ["#0057FE", "#FFCC00", "#50B651", "#ED1C24", "#FF6B35", "#8B5CF6"];
+
+/* ─── Enhanced Success Step ─── */
+const SuccessStep = ({ onClose }: { onClose: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    className="flex flex-col items-center py-8 relative overflow-hidden"
+  >
+    {/* Confetti */}
+    {Array.from({ length: 20 }).map((_, i) => (
+      <ConfettiParticle
+        key={i}
+        delay={i * 0.08}
+        x={10 + Math.random() * 80}
+        color={confettiColors[i % confettiColors.length]}
+      />
+    ))}
+
+    <motion.div
+      className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/20"
+      initial={{ scale: 0 }}
+      animate={{ scale: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.2 }}
+    >
+      <motion.div
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-success"
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15, delay: 0.4 }}
+      >
+        <Check className="h-8 w-8 text-success-foreground" />
+      </motion.div>
+    </motion.div>
+
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.6 }}
+      className="flex items-center gap-2 mb-2"
+    >
+      <PartyPopper className="h-5 w-5 text-primary" />
+      <h3 className="text-xl font-bold text-foreground">Successful</h3>
+      <PartyPopper className="h-5 w-5 text-primary" />
+    </motion.div>
+
+    <motion.p
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: 0.8 }}
+      className="mb-8 text-sm text-muted-foreground text-center"
+    >
+      Your transaction has been submitted<br />successfully
+    </motion.p>
+
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1 }}
+      className="w-full flex flex-col items-center"
+    >
+      <Button onClick={onClose} className="w-full max-w-xs rounded-lg">Done</Button>
+      <button onClick={onClose} className="mt-3 text-sm font-medium text-primary hover:underline">Go Back</button>
+    </motion.div>
+  </motion.div>
+);
+
+const amountOptions = ["N100", "N200", "N500", "N1000", "N2000", "N5000"];
+const bettingAmountOptions = ["N500", "N1000", "N2000", "N5000", "N10000"];
+const dataPackageOptions = ["20GB", "1GB", "2GB", "10GB"];
+
+const getConfig = (type: PurchaseType) => {
+  switch (type) {
+    case "airtime":
+      return { title: "Instant Airtime, Anytime!", subtitle: "Instant Airtime, Anytime!", totalSteps: 3 };
+    case "data":
+      return { title: "Stay Connected with Instant Data", subtitle: "Instant data, any network, hassle-free!", totalSteps: 3 };
+    case "electricity":
+      return { title: "Electricity Bill Payment", subtitle: "Pay your electricity bills in seconds", totalSteps: 4 };
+    case "giftcard":
+      return { title: "Gift Cards Payment", subtitle: "Pay your gift cards in seconds", totalSteps: 4 };
+    case "cabletv":
+      return { title: "Cable TV Payment", subtitle: "Pay your cable tv in seconds", totalSteps: 4 };
+    case "betting":
+      return { title: "Betting Payment", subtitle: "Pay your betting in seconds", totalSteps: 3 };
+    case "esim":
+      return { title: "Esim Payment", subtitle: "Pay your esim in seconds", totalSteps: 4 };
+  }
+};
+
+const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
+  const [step, setStep] = useState(1);
+  const [phone, setPhone] = useState("");
+  const [network, setNetwork] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dataType, setDataType] = useState("");
+  const [plan, setPlan] = useState("");
+  const [coupon, setCoupon] = useState("");
+  const [billerName, setBillerName] = useState("");
+  const [paymentType, setPaymentType] = useState("");
+  const [meterNumber, setMeterNumber] = useState("");
+  const [giftCardCategory, setGiftCardCategory] = useState("");
+  const [giftCardCountry, setGiftCardCountry] = useState("");
+  const [giftCardSubCategory, setGiftCardSubCategory] = useState("");
+  const [giftCardAmount, setGiftCardAmount] = useState("");
+  const [giftCardImages, setGiftCardImages] = useState<string[]>([]);
+  const [cableProvider, setCableProvider] = useState("");
+  const [cablePlan, setCablePlan] = useState("");
+  const [decoderNumber, setDecoderNumber] = useState("");
+  const [bettingPlatform, setBettingPlatform] = useState("");
+  const [bettingUserId, setBettingUserId] = useState("");
+  const [esimCountry, setEsimCountry] = useState("");
+  const [esimProvider, setEsimProvider] = useState("");
+  const [esimPackage, setEsimPackage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // API state
+  const [loading, setLoading] = useState(false);
+  const [networksLoading, setNetworksLoading] = useState(false);
+  const [networks, setNetworks] = useState<Operator[]>([]);
+  const [dataTypes, setDataTypes] = useState<SubCategory[]>([]);
+  const [billers, setBillers] = useState<Operator[]>([]);
+  const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([]);
+  const [packages, setPackages] = useState<Product[]>([]);
+  const [providers, setProviders] = useState<Operator[]>([]);
+  const [validatedAccount, setValidatedAccount] = useState<any>(null);
+  const [phoneValidation, setPhoneValidation] = useState<PhoneValidation | null>(null);
+
+  // ── Nigerian networks — display fallback only (used when API network list is empty) ──
+  const NIGERIAN_NETWORKS: Operator[] = [
+    { id: "mtn", name: "MTN Nigeria", currency: "NGN", prefixes: [] },
+    { id: "airtel", name: "Airtel Nigeria", currency: "NGN", prefixes: [] },
+    { id: "glo", name: "Glo Nigeria", currency: "NGN", prefixes: [] },
+    { id: "9mobile", name: "9mobile (Etisalat)", currency: "NGN", prefixes: [] },
+  ];
+
+  // Load networks (+ data types for the data flow) when the modal opens
+  useEffect(() => {
+    if (!open) return;
+
+    const loadNetworks = async () => {
+      // Pre-populate with display fallback so the dropdown is never blank
+      if (type === "airtime" || type === "data") {
+        setNetworks(NIGERIAN_NETWORKS);
+      }
+      setNetworksLoading(true);
+      try {
+        let result;
+        if (type === "airtime") {
+          result = await getAirtimeNetworks();
+        } else if (type === "data") {
+          // Load networks and data types in parallel
+          const [netResult, typesResult] = await Promise.all([
+            getDataNetworks(),
+            getDataTypes(),
+          ]);
+          if (Array.isArray(netResult.data) && netResult.data.length > 0) {
+            setNetworks(netResult.data);
+          }
+          if (Array.isArray(typesResult.data) && typesResult.data.length > 0) {
+            setDataTypes(typesResult.data);
+          }
+          setNetworksLoading(false);
+          return; // early return — already handled above
+        } else if (type === "electricity") {
+          result = await getElectricityBillers();
+          setBillers(result.data || []);
+        } else if (type === "cabletv") {
+          result = await getCableTvBillers();
+          setBillers(result.data || []);
+        } else if (type === "esim") {
+          result = await getESimProviders("NG");
+          setProviders(result.data || []);
+        }
+
+        // Upgrade to live API data if the response is non-empty
+        if (type === "airtime") {
+          const apiNetworks = result?.data;
+          if (Array.isArray(apiNetworks) && apiNetworks.length > 0) {
+            setNetworks(apiNetworks);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load networks from API:", error);
+        // Fallback list is already set above
+      } finally {
+        setNetworksLoading(false);
+      }
+    };
+
+    loadNetworks();
+  }, [open, type]);
+
+  // Detect network via API only — debounced 500ms, triggers once phone is 10+ digits
+  useEffect(() => {
+    if (phone.length < 10) {
+      setPhoneValidation(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        /**
+         * Normalise to international msisdn format (e.g. 2348031234567) before
+         * calling the API, which does NOT understand local formats like 08031234567.
+         *   +2348031234567  →  2348031234567  (strip leading +)
+         *   2348031234567   →  2348031234567  (already correct)
+         *   08031234567     →  2348031234567  (replace leading 0 with 234)
+         *   8031234567      →  2348031234567  (prepend 234 to bare 10-digit)
+         */
+        const digits = phone.replace(/\D/g, "");
+        let msisdn: string;
+        if (digits.startsWith("234")) {
+          msisdn = digits;
+        } else if (digits.startsWith("0")) {
+          msisdn = "234" + digits.slice(1);
+        } else if (digits.length === 10) {
+          msisdn = "234" + digits;
+        } else {
+          msisdn = digits; // pass through unchanged and let API decide
+        }
+
+        const result = await validatePhoneNumber(msisdn);
+        if (result.success && result.data) {
+          setPhoneValidation(result.data);
+          const operatorId = result.data?.operator?.id;
+          if (operatorId) {
+            const matched = networks.find((n) => n.id === operatorId);
+            if (matched) setNetwork(matched.id);
+          }
+        }
+      } catch (error) {
+        console.error("Phone validation failed:", error);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [phone, networks]);
+
+  // Load payment plans when biller/provider changes
+  useEffect(() => {
+    const loadPaymentPlans = async () => {
+      if (type === "electricity" && billerName) {
+        setLoading(true);
+        try {
+          const result = await getElectricityPaymentPlans(billerName);
+          setPaymentPlans(result.data || []);
+        } catch (error) {
+          console.error("Failed to load payment plans:", error);
+        } finally {
+          setLoading(false);
+        }
+      } else if (type === "cabletv" && cableProvider) {
+        setLoading(true);
+        try {
+          const result = await getCableTvPaymentPlans(cableProvider);
+          setPaymentPlans(result.data || []);
+        } catch (error) {
+          console.error("Failed to load cable TV plans:", error);
+        } finally {
+          setLoading(false);
+        }
+      } else if (type === "esim" && esimProvider) {
+        setLoading(true);
+        try {
+          const result = await getESimPackages(esimProvider);
+          setPackages(result.data || []);
+        } catch (error) {
+          console.error("Failed to load eSIM packages:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPaymentPlans();
+  }, [billerName, cableProvider, esimProvider, type]);
+
+  // Load data plans when network or data type changes
+  // dataType now stores the category_id directly (e.g. "4.1", "4.3") from the API
+  useEffect(() => {
+
+    /**
+     * Client-side plan filter.
+     * The API /public/data/plans does not filter by typeId server-side —
+     * it returns all plans for the network. We filter by plan name keywords.
+     */
+    const filterPlansByType = (plans: Product[], categoryId: string): Product[] => {
+      switch (categoryId) {
+        case "4.1": // Daily Bundles — 1 or 2 day plans
+          return plans.filter(p =>
+            /\(1\s*day\)/i.test(p.name) ||
+            /\(2\s*days?\)/i.test(p.name) ||
+            /\bdaily\b/i.test(p.name)
+          );
+        case "4.2": // 7-14 Day Bundles — weekly plans
+          return plans.filter(p =>
+            /\([7-9]\s*days?\)/i.test(p.name) ||
+            /\(1[0-4]\s*days?\)/i.test(p.name) ||
+            /\bweekly\b/i.test(p.name)
+          );
+        case "4.3": // Monthly Bundles — 30-day plans, excluding SME/business
+          return plans.filter(p =>
+            (/\(30\s*days?\)/i.test(p.name) || /\bmonthly\b/i.test(p.name)) &&
+            !/hynetflex|xtra bundle|5g router|sme/i.test(p.name)
+          );
+        case "4.4": // Extended Validity — 2+ month, 90 day, yearly
+          return plans.filter(p =>
+            /2-month|3-month|\(90\s*days?\)|\b1\s*year\b|broadband|\b3\s*months\b|\b2\s*months\b/i.test(p.name)
+          );
+        case "4.5": // Special Offers
+          return plans.filter(p =>
+            /special|bonus|xtraview|promo/i.test(p.name)
+          );
+        case "4.6": // SME Data Share
+          return plans.filter(p =>
+            /hynetflex|xtra bundle|5g router|sme/i.test(p.name)
+          );
+        default:
+          return plans;
+      }
+    };
+
+    const loadDataPlans = async () => {
+      if (type === "data" && network && dataType) {
+        setLoading(true);
+        try {
+          // dataType already holds the category_id (e.g. "4.3" for monthly)
+          // network holds the networkId (e.g. "1" for MTN Nigeria)
+          const result = await getDataPlans(dataType, network);
+          const allPlans = result.data || [];
+          const filtered = filterPlansByType(allPlans, dataType);
+          // If filter yields nothing (e.g. no special offers for this network),
+          // fall back to showing all plans so the dropdown is never empty
+          setPackages(filtered.length > 0 ? filtered : allPlans);
+        } catch (error) {
+          console.error("Failed to load data plans:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDataPlans();
+  }, [network, dataType, type]);
+
+  // Validate account when meter/decoder number changes
+  const validateAccountNumber = async (accountNumber: string, productId: string) => {
+    if (!accountNumber || !productId) return;
+
+    setLoading(true);
+    try {
+      const result = await validateAccount(accountNumber, productId);
+      if (result.success) {
+        setValidatedAccount(result.data);
+      }
+    } catch (error) {
+      console.error("Account validation failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reset = () => {
+    setStep(1);
+    setPhone(""); setNetwork(""); setAmount("");
+    setDataType(""); setPlan(""); setCoupon("");
+    setBillerName(""); setPaymentType(""); setMeterNumber("");
+    setGiftCardCategory(""); setGiftCardCountry("");
+    setGiftCardSubCategory(""); setGiftCardAmount("");
+    setGiftCardImages([]);
+    setCableProvider(""); setCablePlan(""); setDecoderNumber("");
+    setBettingPlatform(""); setBettingUserId("");
+    setEsimCountry(""); setEsimProvider(""); setEsimPackage("");
+    // Reset API state
+    setNetworks([]); setDataTypes([]); setBillers([]); setPaymentPlans([]);
+    setPackages([]); setProviders([]); setValidatedAccount(null);
+    setPhoneValidation(null);
+  };
+
+  const handleClose = () => { reset(); onClose(); };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          if (ev.target?.result) {
+            setGiftCardImages((prev) => [...prev, ev.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const config = getConfig(type);
+  const stepLabels = getStepLabels(type);
+  const successStep = config.totalSteps;
+
+  const getConfirmStep = () => {
+    switch (type) {
+      case "airtime": case "data": case "betting": return 2;
+      case "electricity": case "giftcard": case "cabletv": case "esim": return config.totalSteps - 1;
+    }
+  };
+  const confirmStepNum = getConfirmStep();
+
+  // Build confirm rows based on type
+  const getConfirmRows = () => {
+    const selectedNetwork = networks.find((n) => n.id === network);
+    const selectedPlan = packages.find((p) => p.id === plan);
+    const selectedCableProvider = billers.find((b) => b.id === cableProvider);
+    const selectedCablePlan = paymentPlans.find((p) => p.id === cablePlan);
+    const selectedEsimProvider = providers.find((p) => p.id === esimProvider);
+    const selectedEsimPkg = packages.find((p) => p.id === esimPackage);
+
+    switch (type) {
+      case "airtime":
+        return [
+          { label: "Network:", value: selectedNetwork?.name || network || "—" },
+          { label: "Phone Number:", value: phone || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "data":
+        return [
+          { label: "Network:", value: selectedNetwork?.name || network || "—" },
+          { label: "Data Plan:", value: selectedPlan?.name || plan || "—" },
+          { label: "Phone Number:", value: phone || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "electricity":
+        return [
+          { label: "Biller Name:", value: billers.find((b) => b.id === billerName)?.name || billerName || "—" },
+          { label: "Account Name:", value: validatedAccount?.customerName || "Not validated" },
+          { label: "Payment Type:", value: paymentType || "—" },
+          { label: "Meter Number:", value: meterNumber || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "cabletv":
+        return [
+          { label: "Provider:", value: selectedCableProvider?.name || cableProvider || "—" },
+          { label: "Account Name:", value: validatedAccount?.customerName || "Not validated" },
+          { label: "Plan:", value: selectedCablePlan?.name || cablePlan || "—" },
+          { label: "Decoder Number:", value: decoderNumber || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "giftcard":
+        return [
+          { label: "Category:", value: giftCardCategory || "—" },
+          { label: "Country:", value: giftCardCountry || "—" },
+          { label: "Type:", value: giftCardSubCategory || "—" },
+          { label: "Amount:", value: `₦${(giftCardAmount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "betting":
+        return [
+          { label: "Platform:", value: bettingPlatform || "—" },
+          { label: "User ID:", value: bettingUserId || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N]/g, "")}` },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Date & Time:", value: new Date().toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+      case "esim":
+        return [
+          { label: "Country:", value: esimCountry === "NG" ? "🇳🇬 Nigeria" : esimCountry === "GH" ? "🇬🇭 Ghana" : esimCountry === "KE" ? "🇰🇪 Kenya" : esimCountry === "ZA" ? "�� South Africa" : esimCountry || "—" },
+          { label: "Service Provider:", value: selectedEsimProvider?.name || esimProvider || "—" },
+          { label: "Package:", value: selectedEsimPkg?.name || esimPackage || "—" },
+          { label: "Amount:", value: `₦${(amount || "0").replace(/[₦N$]/g, "")}` },
+          { label: "Phone Number:", value: phone || "—" },
+          { label: "Stamp Duty:", value: "₦25.00" },
+          { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+          { label: "Bonus to earn:", value: "₦20" },
+        ];
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="fixed right-0 top-0 md:top-4 md:bottom-4 left-auto translate-x-0 translate-y-0 max-w-6xl w-full md:w-[90vw] p-0 md:p-4 gap-0 overflow-visible rounded-none md:rounded-2xl h-screen md:h-[calc(100vh-2rem)] max-h-screen md:max-h-[calc(100vh-2rem)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 border-r-0 [&>button:last-of-type]:hidden"
+      >
+        <DialogTitle className="sr-only">{config.title}</DialogTitle>
+        <DialogDescription className="sr-only">{config.subtitle}</DialogDescription>
+        {/* Close icon in a circle at top-left edge of the modal */}
+        <button
+          onClick={handleClose}
+          className="absolute left-3 top-3 md:-left-5 md:-top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-md border border-border hover:bg-muted transition-colors"
+        >
+          <X className="h-5 w-5 text-foreground" />
+        </button>
+        <div className="flex flex-col md:flex-row h-full">
+          <PromoSidebar />
+
+          <div className="flex-1 p-6 pt-16 md:p-10 overflow-y-auto">
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-xl font-bold text-foreground">{config.title}</h2>
+              <Select defaultValue="nigeria">
+                <SelectTrigger className="w-[130px] rounded-lg border-primary text-primary text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nigeria">In Nigeria</SelectItem>
+                  <SelectItem value="ghana">In Ghana</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{config.subtitle}</p>
+
+            <StepIndicator currentStep={step} totalSteps={config.totalSteps} labels={stepLabels} />
+
+            {/* ==================== AIRTIME - Step 1 ==================== */}
+            {type === "airtime" && step === 1 && (
+              <StepTransition stepKey="airtime-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
+                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <NetworkSelect value={network} onChange={setNetwork} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
+                    <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <AmountChips options={amountOptions} value={amount} onChange={setAmount} />
+                  <PriceDisplay amount={amount} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!phone || !network || !amount}>
+                      Buy Now
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== DATA - Step 1 ==================== */}
+            {type === "data" && step === 1 && (
+              <StepTransition stepKey="data-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
+                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <NetworkSelect value={network} onChange={(v) => { setNetwork(v); setDataType(""); setPlan(""); setPackages([]); setAmount(""); }} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Data Type</label>
+                    <Select value={dataType} onValueChange={(v) => { setDataType(v); setPlan(""); setPackages([]); setAmount(""); }} disabled={!network}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={!network ? "Select network first" : dataTypes.length === 0 ? "Loading types..." : "Choose Data Type"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dataTypes.length === 0 ? (
+                          <SelectItem value="__loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading types...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          dataTypes.map((dt) => (
+                            <SelectItem key={dt.category_id} value={dt.category_id}>
+                              {/* Strip the "Mobile Data > " prefix for a cleaner label */}
+                              {dt.name.replace(/^Mobile Data > /, "")}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Plan</label>
+                    <Select value={plan} onValueChange={(value) => {
+                      setPlan(value);
+                      const selectedPackage = packages.find(p => p.id === value);
+                      if (selectedPackage) {
+                        setAmount(selectedPackage.price.operator);
+                      }
+                    }} disabled={!dataType || packages.length === 0}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={
+                          !dataType ? "Select data type first" :
+                            loading ? "Loading plans..." :
+                              packages.length === 0 ? "No plans available" :
+                                "Choose Plan"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading plans...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          packages.map((pkg) => (
+                            <SelectItem key={pkg.id} value={pkg.id}>
+                              {pkg.name} - ₦{pkg.price.operator}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <PriceDisplay amount={amount} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!phone || !network || !plan}>
+                      Buy Now
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== ELECTRICITY - Step 1 ==================== */}
+            {type === "electricity" && step === 1 && (
+              <StepTransition stepKey="electricity-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Electricity Biller</label>
+                    <Select value={billerName} onValueChange={setBillerName} disabled={networksLoading}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={networksLoading ? "Loading billers..." : "Select Biller"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {networksLoading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          billers.map((biller) => (
+                            <SelectItem key={biller.id} value={biller.id}>
+                              {biller.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {billerName && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Payment plan will be loaded automatically after selecting biller.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Meter Number</label>
+                    <Input
+                      placeholder="Enter Meter Number"
+                      value={meterNumber}
+                      onChange={(e) => setMeterNumber(e.target.value)}
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        if (paymentPlans.length > 0) {
+                          validateAccountNumber(meterNumber, paymentPlans[0].id);
+                        }
+                        setStep(2);
+                      }}
+                      className="flex-1 rounded-lg"
+                      disabled={!billerName || !meterNumber || loading}
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Validate Meter Number
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                  {validatedAccount && (
+                    <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
+                      <p className="text-sm text-success font-medium">✓ Account Validated</p>
+                      <p className="text-xs text-muted-foreground">Customer: {validatedAccount.customerName}</p>
+                    </div>
+                  )}
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ELECTRICITY - Step 2 (amount) */}
+            {type === "electricity" && step === 2 && (
+              <StepTransition stepKey="electricity-2">
+                <div className="space-y-4">
+                  {validatedAccount && (
+                    <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
+                      <p className="text-sm text-success font-medium">✓ Account Validated</p>
+                      <p className="text-xs text-muted-foreground">Customer: {validatedAccount.customerName}</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
+                    <Input
+                      placeholder={
+                        paymentPlans.length > 0 && paymentPlans[0].price.min
+                          ? `Enter Amount (₦${paymentPlans[0].price.min.operator} - ₦${paymentPlans[0].price.max?.operator})`
+                          : "Enter Amount"
+                      }
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="rounded-lg"
+                    />
+                    {paymentPlans.length > 0 && paymentPlans[0].price.min && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Minimum: ₦{paymentPlans[0].price.min.operator} | Maximum: ₦{paymentPlans[0].price.max?.operator}
+                      </p>
+                    )}
+                  </div>
+                  <PriceDisplay amount={amount} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg" disabled={!amount}>
+                      Buy Now
+                    </Button>
+                    <Button variant="outline" onClick={() => setStep(1)} className="rounded-lg px-8">Go Back</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== CABLE TV - Step 1 ==================== */}
+            {type === "cabletv" && step === 1 && (
+              <StepTransition stepKey="cabletv-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Provider</label>
+                    <Select value={cableProvider} onValueChange={setCableProvider} disabled={loading}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={loading ? "Loading providers..." : "Choose Provider"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          billers.map((provider) => (
+                            <SelectItem key={provider.id} value={provider.id}>
+                              {provider.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!cableProvider}>
+                      Proceed
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* CABLE TV - Step 2 (plan + decoder) */}
+            {type === "cabletv" && step === 2 && (
+              <StepTransition stepKey="cabletv-2">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Provider</label>
+                    <Select value={cableProvider} onValueChange={setCableProvider} disabled>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {billers.map((provider) => (
+                          <SelectItem key={provider.id} value={provider.id}>
+                            {provider.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Plan</label>
+                    <Select value={cablePlan} onValueChange={(value) => {
+                      setCablePlan(value);
+                      const selectedPlan = paymentPlans.find(p => p.id === value);
+                      if (selectedPlan) {
+                        setAmount(selectedPlan.price.operator || "0");
+                      }
+                    }} disabled={paymentPlans.length === 0}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={
+                          loading ? "Loading plans..." :
+                            paymentPlans.length === 0 ? "No plans available" :
+                              "Choose Plan"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading plans...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          paymentPlans.map((plan) => (
+                            <SelectItem key={plan.id} value={plan.id}>
+                              {plan.name} - ₦{plan.price.operator}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Decoder Number</label>
+                    <Input
+                      placeholder="Enter Decoder Number"
+                      value={decoderNumber}
+                      onChange={(e) => setDecoderNumber(e.target.value)}
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <PriceDisplay amount={amount || "10000"} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        if (cablePlan) {
+                          validateAccountNumber(decoderNumber, cablePlan);
+                        }
+                        setStep(3);
+                      }}
+                      className="flex-1 rounded-lg"
+                      disabled={!cablePlan || !decoderNumber}
+                    >
+                      Buy Now
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                  {validatedAccount && (
+                    <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
+                      <p className="text-sm text-success font-medium">✓ Account Validated</p>
+                      <p className="text-xs text-muted-foreground">Customer: {validatedAccount.customerName}</p>
+                    </div>
+                  )}
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== GIFT CARD - Step 1 ==================== */}
+            {type === "giftcard" && step === 1 && (
+              <StepTransition stepKey="giftcard-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Gift Card Category</label>
+                    <Select value={giftCardCategory} onValueChange={setGiftCardCategory}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Gift Card Category" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Amazon">Amazon</SelectItem>
+                        <SelectItem value="iTunes">iTunes</SelectItem>
+                        <SelectItem value="Google Play">Google Play</SelectItem>
+                        <SelectItem value="Steam">Steam</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Gift Card Country (Optional)</label>
+                    <Select value={giftCardCountry} onValueChange={setGiftCardCountry}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Gift Card Country" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="US">United States</SelectItem>
+                        <SelectItem value="UK">United Kingdom</SelectItem>
+                        <SelectItem value="NG">Nigeria</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Gift card Type/ Sub-Category</label>
+                    <Select value={giftCardSubCategory} onValueChange={setGiftCardSubCategory}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Physical">Physical</SelectItem>
+                        <SelectItem value="Digital">Digital</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
+                    <Select value={giftCardAmount} onValueChange={setGiftCardAmount}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Select Amount" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5000">N5,000</SelectItem>
+                        <SelectItem value="10000">N10,000</SelectItem>
+                        <SelectItem value="20000">N20,000</SelectItem>
+                        <SelectItem value="50000">N50,000</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <PriceDisplay amount={giftCardAmount} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Upload Gift Card Image</label>
+                    <div className="flex items-center gap-3">
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </motion.button>
+                      {giftCardImages.map((img, i) => (
+                        <motion.img
+                          key={i}
+                          src={img}
+                          alt=""
+                          className="h-14 w-14 rounded-lg object-cover"
+                          initial={{ opacity: 0, scale: 0.5 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ type: "spring", stiffness: 300 }}
+                        />
+                      ))}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">You can upload multiple files at once</p>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg">Proceed</Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* GIFT CARD - Step 2 (contact details) */}
+            {type === "giftcard" && step === 2 && (
+              <StepTransition stepKey="giftcard-2">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
+                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
+                    <Input placeholder="Enter Email" className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg">Proceed</Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== BETTING - Step 1 ==================== */}
+            {type === "betting" && step === 1 && (
+              <StepTransition stepKey="betting-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Betting Platform</label>
+                    <Select value={bettingPlatform} onValueChange={setBettingPlatform}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Select Betting Platform" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Bet9ja">Bet9ja</SelectItem>
+                        <SelectItem value="SportyBet">SportyBet</SelectItem>
+                        <SelectItem value="1xBet">1xBet</SelectItem>
+                        <SelectItem value="BetKing">BetKing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">User ID</label>
+                    <Input placeholder="Enter User ID" value={bettingUserId} onChange={(e) => setBettingUserId(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Enter Amount</label>
+                    <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <AmountChips options={bettingAmountOptions} value={amount} onChange={setAmount} />
+                  <PriceDisplay amount={amount} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg">Next</Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== ESIM - Step 1 ==================== */}
+            {type === "esim" && step === 1 && (
+              <StepTransition stepKey="esim-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Country</label>
+                    <Select value={esimCountry} onValueChange={async (value) => {
+                      setEsimCountry(value);
+                      // Load providers for selected country
+                      setLoading(true);
+                      try {
+                        const result = await getESimProviders(value);
+                        setProviders(result.data || []);
+                      } catch (error) {
+                        console.error("Failed to load eSIM providers:", error);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}>
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Select Country" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NG">🇳🇬 Nigeria</SelectItem>
+                        <SelectItem value="GH">🇬🇭 Ghana</SelectItem>
+                        <SelectItem value="KE">🇰🇪 Kenya</SelectItem>
+                        <SelectItem value="ZA">🇿🇦 South Africa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Coupon Code (Optional)</label>
+                    <Input placeholder="Enter Coupon Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(2)} className="flex-1 rounded-lg" disabled={!esimCountry}>
+                      Next
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ESIM - Step 2 (provider, phone, package) */}
+            {type === "esim" && step === 2 && (
+              <StepTransition stepKey="esim-2">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Country</label>
+                    <Select value={esimCountry} onValueChange={setEsimCountry} disabled>
+                      <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NG">🇳🇬 Nigeria</SelectItem>
+                        <SelectItem value="GH">🇬🇭 Ghana</SelectItem>
+                        <SelectItem value="KE">🇰🇪 Kenya</SelectItem>
+                        <SelectItem value="ZA">🇿🇦 South Africa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Service Provider</label>
+                    <Select value={esimProvider} onValueChange={setEsimProvider} disabled={providers.length === 0}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={
+                          loading ? "Loading providers..." :
+                            providers.length === 0 ? "No providers available" :
+                              "Select Provider"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          providers.map((provider) => (
+                            <SelectItem key={provider.id} value={provider.id}>
+                              {provider.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
+                    <Input placeholder="Enter Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Available Package</label>
+                    <Select value={esimPackage} onValueChange={(value) => {
+                      setEsimPackage(value);
+                      const selectedPackage = packages.find(p => p.id === value);
+                      if (selectedPackage) {
+                        setAmount(selectedPackage.price.operator);
+                      }
+                    }} disabled={packages.length === 0}>
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder={
+                          !esimProvider ? "Select provider first" :
+                            loading ? "Loading packages..." :
+                              packages.length === 0 ? "No packages available" :
+                                "Select Package"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loading ? (
+                          <SelectItem value="loading" disabled>
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </span>
+                          </SelectItem>
+                        ) : (
+                          packages.map((pkg) => (
+                            <SelectItem key={pkg.id} value={pkg.id}>
+                              {pkg.name} - ${pkg.price.operator}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* eSIM packages are priced in USD */}
+                  <p className="text-sm text-muted-foreground">
+                    {amount ? <>Total: <span className="font-semibold text-foreground">${amount}</span> USD</> : null}
+                  </p>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg" disabled={!esimProvider || !esimPackage || !phone}>
+                      Proceed
+                    </Button>
+                    <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== CONFIRM STEP (shared) ==================== */}
+            {step === confirmStepNum && (
+              <StepTransition stepKey={`confirm-${type}`}>
+                <div>
+                  <h3 className="mb-4 text-center text-sm font-bold uppercase tracking-wider text-foreground">
+                    Confirm Transaction
+                  </h3>
+                  <div className="border-t border-dashed border-border" />
+                  <div className="space-y-5 py-5">
+                    {getConfirmRows().map((row, i) => (
+                      <motion.div
+                        key={row.label}
+                        className="flex items-center justify-between"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                      >
+                        <span className="text-sm text-muted-foreground">{row.label}</span>
+                        <span className="text-sm font-semibold text-foreground">{row.value}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                  <div className="border-t border-dashed border-border" />
+                  <div className="flex gap-3 pt-6">
+                    <Button onClick={() => setStep(step + 1)} className="flex-1 rounded-lg">Confirm</Button>
+                    <Button variant="outline" onClick={() => setStep(step - 1)} className="rounded-lg px-8">Go Back</Button>
+                  </div>
+                </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== SUCCESS STEP (shared) ==================== */}
+            {step === successStep && step > 1 && <SuccessStep onClose={handleClose} />}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default PurchaseModal;
