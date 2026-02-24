@@ -291,22 +291,23 @@ export default function OurOffers() {
             {/* Carousel */}
             {!loading && !error && products.length > 0 && (
                 <div
-                    className="relative"
+                    className="relative w-full overflow-hidden"
                     onPointerEnter={() => { pausedRef.current = true; }}
                     onPointerLeave={() => { pausedRef.current = false; }}
                 >
-                    {/* Track */}
-                    <div className="overflow-hidden">
+                    {/* Track — translate by full card slots, not % of element */}
+                    <div className="overflow-hidden w-full">
                         <motion.div
-                            className="flex"
-                            animate={{ x: `-${current * cardW}%` }}
+                            className="flex w-full"
+                            animate={{ x: `-${current * (100 / visible)}%` }}
+                            style={{ width: `${(products.length / visible) * 100}%` }}
                             transition={{ type: "spring", stiffness: 260, damping: 32 }}
                         >
                             {products.map((product) => (
                                 <div
                                     key={product.id}
-                                    className="flex-shrink-0 px-1.5"
-                                    style={{ width: `${cardW}%` }}
+                                    className="flex-shrink-0 px-1.5 box-border"
+                                    style={{ width: `${100 / products.length}%` }}
                                 >
                                     <ProductCard product={product} />
                                 </div>
