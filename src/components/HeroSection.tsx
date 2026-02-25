@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import slide1 from "@/assets/slide-1.png";
 import slide2 from "@/assets/slide-2.png";
@@ -7,14 +7,48 @@ import heroLogo from "@/assets/shopsonline-logo.svg";
 
 const slides = [slide1, slide2, slide3];
 
-const textVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: 0.2 + i * 0.15, duration: 0.6, ease: "easeOut" },
-  }),
-};
+/* Same slide content as the modal PromoSidebar */
+const slideContent = [
+  {
+    title: (
+      <>
+        <span className="text-primary">Discover</span> Sellers, SMEs,
+        <br />Professionals Across
+        <br />Markets
+      </>
+    ),
+    description:
+      "OnShops.online is a growing digital directory of shops, SMEs, professionals, and service providers integrated into the digital economy across Africa.",
+    cta: "Visit Marketplace",
+    href: "https://www.onshops.online/",
+  },
+  {
+    title: (
+      <>
+        <span className="text-primary">Recharge</span> Airtime &amp; Data
+        <br />Instantly,
+        <br />Anytime
+      </>
+    ),
+    description:
+      "Top up your phone or a loved one's in seconds — MTN, Airtel, Glo, 9mobile — with a 1% loyalty bonus on every ₦1,000+ purchase.",
+    cta: "Buy Airtime Now",
+    href: "#",
+  },
+  {
+    title: (
+      <>
+        <span className="text-primary">Pay Bills</span> Without
+        <br />Leaving
+        <br />Your Seat
+      </>
+    ),
+    description:
+      "Electricity, cable TV, betting wallets and more — pay all your utility bills in one place and earn loyalty rewards on every transaction.",
+    cta: "Pay a Bill",
+    href: "#",
+  },
+];
 
 const HeroSection = () => {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -41,12 +75,13 @@ const HeroSection = () => {
           src={slide}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
-          initial={{ opacity: 0 }}
           animate={{ opacity: activeSlide === i ? 1 : 0 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         />
       ))}
-      <div className="absolute inset-0 bg-gradient-to-r from-navy/90 via-navy/60 to-transparent" />
+
+      {/* Gradient overlay — same as modal's "from-navy/95 via-navy/55" style */}
+      <div className="absolute inset-0 bg-gradient-to-t from-navy/95 via-navy/60 to-navy/20" />
 
       <div className="relative z-10 flex flex-col justify-between p-8 h-full">
         {/* Top logo */}
@@ -59,56 +94,52 @@ const HeroSection = () => {
           <img src={heroLogo} alt="ShopsOnline" className="h-10 brightness-0 invert" />
         </motion.div>
 
-        {/* Bottom content */}
+        {/* Bottom — per-slide text with AnimatePresence, same as PromoSidebar */}
         <div>
-          <motion.h1
-            className="mb-4 text-3xl font-bold text-primary-foreground leading-tight"
-            custom={0}
-            variants={textVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            Get <span className="text-success">1%</span> Bonus On Your<br />
-            Utility Purchase
-          </motion.h1>
-          <motion.p
-            className="mb-6 max-w-xs text-sm text-primary-foreground/70 leading-relaxed"
-            custom={1}
-            variants={textVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            OnShops.online is a growing digital directory of shops, SMEs, professionals, and service providers
-            integrated into the digital economy across Africa.
-          </motion.p>
-          <motion.button
-            className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            custom={2}
-            variants={textVariants}
-            initial="hidden"
-            animate="visible"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            Visit Marketplace
-          </motion.button>
-          <motion.div
-            className="mt-6 flex gap-2"
-            custom={3}
-            variants={textVariants}
-            initial="hidden"
-            animate="visible"
-          >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSlide}
+              initial={{ opacity: 0, y: 22 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+            >
+              <h1 className="mb-4 text-xl md:text-4xl font-bold text-primary-foreground leading-tight">
+                {slideContent[activeSlide].title}
+              </h1>
+              <p className="mb-6 max-w-sm text-sm text-primary-foreground/70 leading-relaxed">
+                {slideContent[activeSlide].description}
+              </p>
+              <motion.a
+                href={slideContent[activeSlide].href}
+                className="inline-block rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                {slideContent[activeSlide].cta}
+              </motion.a>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Pill dots — same animated width as the modal */}
+          <div className="mt-6 flex gap-2">
             {slides.map((_, i) => (
               <motion.button
                 key={i}
                 onClick={() => setActiveSlide(i)}
-                animate={{ width: activeSlide === i ? 24 : 8, backgroundColor: activeSlide === i ? "hsl(var(--primary))" : "rgba(255,255,255,0.3)" }}
+                animate={{
+                  width: i === activeSlide ? 24 : 8,
+                  backgroundColor:
+                    i === activeSlide
+                      ? "hsl(var(--primary))"
+                      : "rgba(255,255,255,0.3)",
+                }}
                 transition={{ duration: 0.3 }}
                 className="h-2 rounded-full"
+                aria-label={`Go to slide ${i + 1}`}
               />
             ))}
-          </motion.div>
+          </div>
         </div>
       </div>
     </motion.div>
