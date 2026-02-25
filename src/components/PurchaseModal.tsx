@@ -48,13 +48,13 @@ interface PurchaseModalProps {
 /* ─── Step Labels ─── */
 const getStepLabels = (type: PurchaseType): string[] => {
   switch (type) {
-    case "airtime": return ["Details", "Confirm", "Done"];
-    case "data": return ["Details", "Confirm", "Done"];
-    case "betting": return ["Details", "Confirm", "Done"];
-    case "electricity": return ["Info", "Amount", "Confirm", "Done"];
-    case "giftcard": return ["Card", "Contact", "Confirm", "Done"];
-    case "cabletv": return ["Provider", "Plan", "Confirm", "Done"];
-    case "esim": return ["Country", "Package", "Confirm", "Done"];
+    case "airtime": return ["Details", "Confirm", "Payment", "Done"];
+    case "data": return ["Details", "Confirm", "Payment", "Done"];
+    case "betting": return ["Details", "Confirm", "Payment", "Done"];
+    case "electricity": return ["Info", "Amount", "Confirm", "Payment", "Done"];
+    case "giftcard": return ["Card", "Contact", "Confirm", "Payment", "Done"];
+    case "cabletv": return ["Provider", "Plan", "Confirm", "Payment", "Done"];
+    case "esim": return ["Country", "Package", "Confirm", "Payment", "Done"];
   }
 };
 
@@ -167,84 +167,145 @@ const NetworkSelect = ({ value, onChange, networks, loading, phoneValidation }: 
   </div>
 );
 
-const offers = [
-  { name: "KFC Special", price: "N18,999", location: "KFC Magodo", discount: "20%" },
-  { name: "Jollof Rice Combo", price: "N12,500", location: "Foodie Hub", discount: "15%" },
-  { name: "Shawarma Deluxe", price: "N8,999", location: "Wrap King", discount: "20%" },
-  { name: "Pepper Soup", price: "N6,500", location: "Mama's Kitchen", discount: "10%" },
-  { name: "Suya Platter", price: "N15,000", location: "Suya Spot VI", discount: "25%" },
-];
+/* ── Modal sidebar — API product types ── */
+const MODAL_API = "https://fuspay-marketplace-api.fly.dev/api/v1";
+const MODAL_LINK = "https://www.onshops.online/shops/all?type=Product";
 
-const VISIBLE_CARDS = 3;
+interface ModalProduct {
+  id: string;
+  name: string;
+  images: string[];
+  prices: { currency: string; price: string; discount: string | null }[];
+  store: { name: string };
+}
+
+function modalPrice(prices: ModalProduct["prices"]): string {
+  if (!prices.length) return "";
+  const p = prices[0];
+  const sym = p.currency === "NGN" ? "₦" : p.currency === "GHS" ? "GH₵" : `${p.currency} `;
+  return `${sym}${Number(p.price).toLocaleString()}`;
+}
+function modalDiscount(prices: ModalProduct["prices"]): number | null {
+  if (!prices.length) return null;
+  const d = Number(prices[0].discount);
+  return d > 0 ? d : null;
+}
 
 const OffersSlider = () => {
+  const [products, setProducts] = useState<ModalProduct[]>([]);
+  const [loading, setLoading] = useState(true);
   const [offset, setOffset] = useState(0);
-  const maxOffset = offers.length - VISIBLE_CARDS;
+  const VISIBLE = 3;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setOffset((o) => (o >= maxOffset ? 0 : o + 1));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [maxOffset]);
+    fetch(`${MODAL_API}/products/public?page=1&limit=12`)
+      .then(r => r.json())
+      .then(json => {
+        // Exact same parsing as OurOffers.tsx: json.data.data
+        const list: ModalProduct[] = json.data?.data ?? [];
+        const active = list.filter((p: ModalProduct & { status?: string; isVisible?: boolean }) =>
+          p.status === "PUBLISHED" && p.isVisible !== false
+        );
+        setProducts(active.slice(0, 9));
+      })
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, []);
 
+  const maxOffset = Math.max(0, products.length - VISIBLE);
+
+  useEffect(() => {
+    if (products.length <= VISIBLE) return;
+    const id = setInterval(() => setOffset(o => (o >= maxOffset ? 0 : o + 1)), 3000);
+    return () => clearInterval(id);
+  }, [products.length, maxOffset]);
 
   return (
-    <div className="p-5 bg-white rounded-b-2xl">
+    <div className="p-4 bg-white rounded-b-2xl">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-bold text-gray-800">Offers on Shops Online</h4>
-        <button className="text-xs font-semibold text-primary hover:underline transition-colors">
+        <a href={MODAL_LINK} target="_blank" rel="noopener" className="text-xs font-semibold text-primary hover:underline transition-colors">
           more →
-        </button>
+        </a>
       </div>
-      <div className="overflow-hidden">
-        <motion.div
-          className="flex gap-3"
-          animate={{ x: `-${offset * (100 / VISIBLE_CARDS + 2.4)}%` }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          {offers.map((offer, i) => (
-            <motion.div
-              key={offer.name}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="flex-shrink-0 flex flex-col rounded-2xl overflow-hidden bg-white shadow-md border border-gray-100"
-              style={{ width: `calc(${100 / VISIBLE_CARDS}% - ${((VISIBLE_CARDS - 1) * 12) / VISIBLE_CARDS}px)` }}
-            >
-              <div className="relative h-24 overflow-hidden">
-                <img src={foodOfferImg} alt={offer.name} className="h-full w-full object-cover" />
-                <div className="absolute top-2 right-2 flex items-center justify-center">
-                  <svg viewBox="0 0 60 60" className="h-10 w-10 drop-shadow-md">
-                    <polygon
-                      points="30,2 35,18 52,12 42,26 58,30 42,34 52,48 35,42 30,58 25,42 8,48 18,34 2,30 18,26 8,12 25,18"
-                      fill="hsl(var(--primary))"
-                    />
-                  </svg>
-                  <span className="absolute text-[8px] font-bold text-primary-foreground leading-tight text-center">
-                    {offer.discount}<br />Off
-                  </span>
-                </div>
+
+      {loading ? (
+        /* Skeletons */
+        <div className="flex gap-2.5">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex-1 rounded-xl overflow-hidden bg-gray-100 animate-pulse">
+              <div className="h-20 bg-gray-200" />
+              <div className="px-1.5 py-1.5 space-y-1.5">
+                <div className="h-5 rounded-full bg-primary/20 w-full" />
+                <div className="h-2.5 rounded bg-gray-200 w-3/4" />
+                <div className="h-2 rounded bg-gray-100 w-1/2" />
               </div>
-              <div className="px-2 pt-2 pb-1">
-                <button className="w-full rounded-full bg-primary py-1.5 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
-                  Grab now
-                </button>
-              </div>
-              <div className="px-2 pb-2.5 pt-1">
-                <div className="flex items-baseline justify-between gap-1">
-                  <p className="text-[11px] font-medium text-gray-800 truncate">{offer.name}</p>
-                  <span className="text-xs font-extrabold text-gray-900 whitespace-nowrap">{offer.price}</span>
-                </div>
-                <p className="text-[9px] text-gray-500 flex items-center gap-1 mt-0.5">
-                  <span className="inline-block h-3 w-3 rounded-full bg-gray-200 overflow-hidden text-[7px]">👤</span>
-                  {offer.location}
-                </p>
-              </div>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
-      </div>
+        </div>
+      ) : products.length === 0 ? (
+        <p className="text-xs text-gray-400 text-center py-4">No offers available</p>
+      ) : (
+        <div className="overflow-hidden">
+          <motion.div
+            className="flex gap-2.5"
+            animate={{ x: `-${offset * (100 / VISIBLE + 2.8)}%` }}
+            transition={{ type: "spring", stiffness: 280, damping: 28 }}
+          >
+            {products.map((product, i) => {
+              const img = product.images[0] ?? null;
+              const price = modalPrice(product.prices);
+              const disc = modalDiscount(product.prices);
+              return (
+                <motion.div
+                  key={product.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  className="flex-shrink-0 flex flex-col rounded-xl overflow-hidden bg-white shadow border border-gray-100"
+                  style={{ width: `calc(${100 / VISIBLE}% - ${((VISIBLE - 1) * 10) / VISIBLE}px)` }}
+                >
+                  {/* Image */}
+                  <div className="relative h-20 overflow-hidden bg-gray-100">
+                    {img ? (
+                      <img src={img} alt={product.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <svg className="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      </div>
+                    )}
+                    {disc && (
+                      <div className="absolute top-1.5 right-1.5 flex items-center justify-center">
+                        <svg viewBox="0 0 60 60" className="h-8 w-8 drop-shadow">
+                          <polygon points="30,2 35,18 52,12 42,26 58,30 42,34 52,48 35,42 30,58 25,42 8,48 18,34 2,30 18,26 8,12 25,18" fill="hsl(var(--primary))" />
+                        </svg>
+                        <span className="absolute text-[7px] font-bold text-primary-foreground leading-tight text-center">{disc}%<br />Off</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* CTA */}
+                  <div className="px-1.5 pt-1.5 pb-1">
+                    <a
+                      href={MODAL_LINK}
+                      target="_blank"
+                      rel="noopener"
+                      className="block w-full rounded-full bg-primary py-1.5 text-[10px] font-bold text-primary-foreground text-center hover:bg-primary/90 transition-colors"
+                    >
+                      Grab now
+                    </a>
+                  </div>
+                  {/* Info */}
+                  <div className="px-1.5 pb-2 pt-0.5">
+                    <p className="text-[10px] font-semibold text-gray-800 truncate leading-tight">{product.name}</p>
+                    {price && <p className="text-[10px] font-extrabold text-gray-900">{price}</p>}
+                    <p className="text-[9px] text-gray-400 truncate mt-0.5">{product.store.name}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
@@ -281,7 +342,7 @@ const PromoSidebar = () => {
     <div className="hidden md:flex w-[420px] min-w-[420px] flex-col overflow-hidden rounded-l-2xl bg-navy">
       {/* Logo pinned at the top */}
       <div className="relative z-20 flex items-center gap-2 px-6 pt-5 pb-3">
-        <img src={heroLogo} alt="ShopsOnline by FusPay" className="h-6 brightness-0 invert" />
+        <img src={heroLogo} alt="ShopsOnline by FusPay" className="h-9 brightness-0 invert" />
       </div>
 
       {/* Carousel section — fills remaining space */}
@@ -524,24 +585,115 @@ const dataPackageOptions = ["20GB", "1GB", "2GB", "10GB"];
 const getConfig = (type: PurchaseType) => {
   switch (type) {
     case "airtime":
-      return { title: "Instant Airtime, Anytime!", subtitle: "Instant Airtime, Anytime!", totalSteps: 3 };
+      return { title: "Instant Airtime, Anytime!", subtitle: "Instant Airtime, Anytime!", totalSteps: 4 };
     case "data":
-      return { title: "Stay Connected with Instant Data", subtitle: "Instant data, any network, hassle-free!", totalSteps: 3 };
+      return { title: "Stay Connected with Instant Data", subtitle: "Instant data, any network, hassle-free!", totalSteps: 4 };
     case "electricity":
-      return { title: "Electricity Bill Payment", subtitle: "Pay your electricity bills in seconds", totalSteps: 4 };
+      return { title: "Electricity Bill Payment", subtitle: "Pay your electricity bills in seconds", totalSteps: 5 };
     case "giftcard":
-      return { title: "Gift Cards Payment", subtitle: "Pay your gift cards in seconds", totalSteps: 4 };
+      return { title: "Gift Cards Payment", subtitle: "Pay your gift cards in seconds", totalSteps: 5 };
     case "cabletv":
-      return { title: "Cable TV Payment", subtitle: "Pay your cable tv in seconds", totalSteps: 4 };
+      return { title: "Cable TV Payment", subtitle: "Pay your cable tv in seconds", totalSteps: 5 };
     case "betting":
-      return { title: "Betting Payment", subtitle: "Pay your betting in seconds", totalSteps: 3 };
+      return { title: "Betting Payment", subtitle: "Pay your betting in seconds", totalSteps: 4 };
     case "esim":
-      return { title: "Esim Payment", subtitle: "Pay your esim in seconds", totalSteps: 4 };
+      return { title: "Esim Payment", subtitle: "Pay your esim in seconds", totalSteps: 5 };
   }
 };
 
 const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const [step, setStep] = useState(1);
+  // Stable reference for this modal session
+  const paymentRef = useRef(`ORD-${crypto.randomUUID().slice(0, 23)}-${Date.now()}`);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [verifyStage, setVerifyStage] = useState(0); // 0=idle, 1,2,3=stages done
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /* ── Validation helpers ── */
+  const vl = {
+    fullName: (v: string) => {
+      if (!v.trim()) return "Full name is required";
+      if (v.trim().split(/\s+/).length < 2) return "Enter your first and last name";
+      if (/\d/.test(v)) return "Name cannot contain numbers";
+      return "";
+    },
+    email: (v: string) => {
+      if (!v.trim()) return "Email address is required";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return "Enter a valid email address";
+      return "";
+    },
+    phone: (v: string) => {
+      const d = v.replace(/\D/g, "");
+      if (!d) return "Phone number is required";
+      if ((d.startsWith("0") && d.length !== 11) || (d.startsWith("234") && d.length !== 13))
+        return "Enter a valid Nigerian number (e.g. 0803 123 4567)";
+      return "";
+    },
+    amount: (v: string, min = 50, max = 50000) => {
+      const n = parseFloat(v.replace(/[₦N,\s]/g, ""));
+      if (!v.trim() || isNaN(n) || n === 0) return "Please enter an amount";
+      if (n < min) return `Minimum amount is ₦${min.toLocaleString("en-NG")}`;
+      if (n > max) return `Maximum amount is ₦${max.toLocaleString("en-NG")}`;
+      return "";
+    },
+    meterNumber: (v: string) => {
+      if (!v.trim()) return "Meter number is required";
+      if (!/^\d{11}$/.test(v.trim())) return "Meter number must be exactly 11 digits";
+      return "";
+    },
+    decoderNumber: (v: string) => {
+      if (!v.trim()) return "Decoder / Smart Card number is required";
+      if (v.trim().replace(/\D/g, "").length < 10) return "Enter a valid decoder number (min 10 digits)";
+      return "";
+    },
+    bettingUserId: (v: string) => {
+      if (!v.trim()) return "User ID is required";
+      if (v.trim().length < 3) return "User ID must be at least 3 characters";
+      return "";
+    },
+  };
+
+  const setErr = (field: string, msg: string) => setErrors(e => ({ ...e, [field]: msg }));
+  const clearErr = (field: string) => setErrors(e => { const n = { ...e }; delete n[field]; return n; });
+  const touchField = (field: string, msg: string) => { if (msg) setErr(field, msg); else clearErr(field); };
+  const hasErr = (...fields: string[]) => fields.some(f => !!errors[f]);
+
+  /* Inline error message component */
+  const Err = ({ field }: { field: string }) => errors[field] ? (
+    <motion.p
+      key={errors[field]}
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="text-xs text-destructive mt-1 flex items-center gap-1"
+    >
+      <span aria-hidden>⚠</span> {errors[field]}
+    </motion.p>
+  ) : null;
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
+
+  const handleIvePaid = () => {
+    setVerifyingPayment(true);
+    setVerifyStage(0);
+    // Stage 1 — Connecting to bank
+    setTimeout(() => setVerifyStage(1), 800);
+    // Stage 2 — Verifying your transfer
+    setTimeout(() => setVerifyStage(2), 2000);
+    // Stage 3 — Confirming payment
+    setTimeout(() => setVerifyStage(3), 3200);
+    // Done — go to success
+    setTimeout(() => {
+      setVerifyingPayment(false);
+      setVerifyStage(0);
+      setStep(successStep);
+    }, 4200);
+  };
   const [phone, setPhone] = useState("");
   const [network, setNetwork] = useState("");
   const [amount, setAmount] = useState("");
@@ -923,6 +1075,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     setNetworks([]); setDataTypes([]); setBillers([]); setPaymentPlans([]);
     setPackages([]); setProviders([]); setValidatedAccount(null);
     setPhoneValidation(null);
+    setErrors({});
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -1106,11 +1259,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
 
                   {/* ── Bulk / Single toggle ── */}
@@ -1158,7 +1326,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                             )}
                           </div>
                         </div>
-                        <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                        <Input
+                          placeholder="Enter Number"
+                          value={phone}
+                          onChange={(e) => { setPhone(e.target.value); if (errors.phone) touchField("phone", vl.phone(e.target.value)); }}
+                          onBlur={() => touchField("phone", vl.phone(phone))}
+                          className={`rounded-lg ${errors.phone ? "border-destructive" : ""}`}
+                        />
+                        <Err field="phone" />
                       </div>
 
                       {/* Beneficiary quick-select */}
@@ -1380,7 +1555,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       <NetworkSelect value={network} onChange={setNetwork} networks={networks} loading={networksLoading} phoneValidation={phoneValidation} />
                       <div>
                         <label className="mb-1.5 block text-sm font-semibold text-foreground">Amount</label>
-                        <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
+                        <Input
+                          placeholder="Enter Amount"
+                          value={amount}
+                          onChange={(e) => { setAmount(e.target.value); if (errors.amount) touchField("amount", vl.amount(e.target.value, 50)); }}
+                          onBlur={() => touchField("amount", vl.amount(amount, 50))}
+                          className={`rounded-lg ${errors.amount ? "border-destructive" : ""}`}
+                        />
+                        <Err field="amount" />
                       </div>
                       <AmountChips options={amountOptions} value={amount} onChange={setAmount} />
                       <PriceDisplay amount={amount} />
@@ -1392,13 +1574,24 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => handleProceed(() => setStep(2))}
+                      onClick={() => {
+                        const e1 = vl.fullName(fullName), e2 = vl.email(email);
+                        const e3 = isBulk ? "" : vl.phone(phone);
+                        const e4 = isBulk ? "" : vl.amount(amount, 50);
+                        if (e1 || e2 || e3 || e4) {
+                          touchField("fullName", e1); touchField("email", e2);
+                          if (!isBulk) { touchField("phone", e3); touchField("amount", e4); }
+                          return;
+                        }
+                        handleProceed(() => setStep(2));
+                      }}
                       className="flex-1 rounded-lg"
                       disabled={
                         !email || !fullName ||
                         (isBulk
-                          ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length === 0
-                          : !phone || !network || !amount)
+                          ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length < 2
+                          : !phone || !network || !amount) ||
+                        hasErr("fullName", "email", "phone", "amount")
                       }
                     >
                       {isBulk
@@ -1417,11 +1610,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
 
                   {/* ── Bulk / Single toggle ── */}
@@ -1469,7 +1677,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                             )}
                           </div>
                         </div>
-                        <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                        <Input
+                          placeholder="Enter Number"
+                          value={phone}
+                          onChange={(e) => { setPhone(e.target.value); if (errors.phone) touchField("phone", vl.phone(e.target.value)); }}
+                          onBlur={() => touchField("phone", vl.phone(phone))}
+                          className={`rounded-lg ${errors.phone ? "border-destructive" : ""}`}
+                        />
+                        <Err field="phone" />
                       </div>
 
                       {/* Beneficiary quick-select */}
@@ -1603,14 +1818,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => handleProceed(() => setStep(2))}
+                      onClick={() => {
+                        const e1 = vl.fullName(fullName), e2 = vl.email(email);
+                        const e3 = isBulk ? "" : vl.phone(phone);
+                        if (e1 || e2 || e3) {
+                          touchField("fullName", e1); touchField("email", e2);
+                          if (!isBulk) touchField("phone", e3);
+                          return;
+                        }
+                        handleProceed(() => setStep(2));
+                      }}
                       className="flex-1 rounded-lg"
                       disabled={
                         !network || !plan || !email || !fullName ||
-                        (isBulk ? bulkNumbers.filter(Boolean).length === 0 : !phone)
+                        (isBulk
+                          ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length < 2
+                          : !phone) ||
+                        hasErr("fullName", "email", "phone")
                       }
                     >
-                      {isBulk ? `Buy for ${bulkNumbers.filter(Boolean).length} recipient(s)` : "Buy Now"}
+                      {isBulk ? `Buy for ${(bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).length} recipient(s)` : "Buy Now"}
                     </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
@@ -1625,7 +1852,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Select Electricity Biller</label>
@@ -1653,27 +1887,40 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Meter Number</label>
                     <Input
-                      placeholder="Enter Meter Number"
+                      placeholder="Enter 11-digit Meter Number"
                       value={meterNumber}
-                      onChange={(e) => setMeterNumber(e.target.value)}
-                      className="rounded-lg"
+                      onChange={(e) => { setMeterNumber(e.target.value); if (errors.meterNumber) touchField("meterNumber", vl.meterNumber(e.target.value)); }}
+                      onBlur={() => touchField("meterNumber", vl.meterNumber(meterNumber))}
+                      maxLength={11}
+                      className={`rounded-lg ${errors.meterNumber ? "border-destructive" : ""}`}
                     />
+                    <Err field="meterNumber" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => handleProceed(() => {
-                        if (paymentPlans.length > 0) {
-                          validateAccountNumber(meterNumber, paymentPlans[0].id);
-                        }
-                        setStep(2);
-                      })}
+                      onClick={() => {
+                        const e1 = vl.fullName(fullName), e2 = vl.email(email), e3 = vl.meterNumber(meterNumber);
+                        if (e1 || e2 || e3) { touchField("fullName", e1); touchField("email", e2); touchField("meterNumber", e3); return; }
+                        handleProceed(() => {
+                          if (paymentPlans.length > 0) validateAccountNumber(meterNumber, paymentPlans[0].id);
+                          setStep(2);
+                        });
+                      }}
                       className="flex-1 rounded-lg"
-                      disabled={!billerName || !meterNumber || loading || !email || !fullName}
+                      disabled={!billerName || !meterNumber || loading || !email || !fullName || hasErr("fullName", "email", "meterNumber")}
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Validate Meter Number
@@ -1709,9 +1956,11 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                           : "Enter Amount"
                       }
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="rounded-lg"
+                      onChange={(e) => { setAmount(e.target.value); if (errors.amount) touchField("amount", vl.amount(e.target.value, 100)); }}
+                      onBlur={() => touchField("amount", vl.amount(amount, 100))}
+                      className={`rounded-lg ${errors.amount ? "border-destructive" : ""}`}
                     />
+                    <Err field="amount" />
                     {paymentPlans.length > 0 && paymentPlans[0].price.min && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Minimum: ₦{paymentPlans[0].price.min.operator} | Maximum: ₦{paymentPlans[0].price.max?.operator}
@@ -1724,7 +1973,15 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => setStep(3)} className="flex-1 rounded-lg" disabled={!amount}>
+                    <Button
+                      onClick={() => {
+                        const e1 = vl.amount(amount, 100);
+                        if (e1) { touchField("amount", e1); return; }
+                        setStep(3);
+                      }}
+                      className="flex-1 rounded-lg"
+                      disabled={!amount || hasErr("amount")}
+                    >
                       Buy Now
                     </Button>
                     <Button variant="outline" onClick={() => setStep(1)} className="rounded-lg px-8">Go Back</Button>
@@ -1739,11 +1996,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Choose Provider</label>
@@ -1839,11 +2111,13 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Decoder / Smart Card Number</label>
                     <Input
-                      placeholder="Enter Decoder Number"
+                      placeholder="Enter Decoder Number (min 10 digits)"
                       value={decoderNumber}
-                      onChange={(e) => setDecoderNumber(e.target.value)}
-                      className="rounded-lg"
+                      onChange={(e) => { setDecoderNumber(e.target.value); if (errors.decoderNumber) touchField("decoderNumber", vl.decoderNumber(e.target.value)); }}
+                      onBlur={() => touchField("decoderNumber", vl.decoderNumber(decoderNumber))}
+                      className={`rounded-lg ${errors.decoderNumber ? "border-destructive" : ""}`}
                     />
+                    <Err field="decoderNumber" />
                   </div>
                   <PriceDisplay amount={amount || "0"} />
                   {validatedAccount && (
@@ -1854,14 +2128,16 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   )}
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={() => handleProceed(() => {
-                        if (cablePlan) {
-                          validateAccountNumber(decoderNumber, cablePlan);
-                        }
-                        setStep(3);
-                      })}
+                      onClick={() => {
+                        const e1 = vl.decoderNumber(decoderNumber);
+                        if (e1) { touchField("decoderNumber", e1); return; }
+                        handleProceed(() => {
+                          if (cablePlan) validateAccountNumber(decoderNumber, cablePlan);
+                          setStep(3);
+                        });
+                      }}
                       className="flex-1 rounded-lg"
-                      disabled={!cablePlan || !decoderNumber}
+                      disabled={!cablePlan || !decoderNumber || hasErr("decoderNumber")}
                     >
                       Buy Now
                     </Button>
@@ -1968,18 +2244,50 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Phone Number</label>
-                    <Input placeholder="Enter Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter Number"
+                      value={phone}
+                      onChange={(e) => { setPhone(e.target.value); if (errors.phone) touchField("phone", vl.phone(e.target.value)); }}
+                      onBlur={() => touchField("phone", vl.phone(phone))}
+                      className={`rounded-lg ${errors.phone ? "border-destructive" : ""}`}
+                    />
+                    <Err field="phone" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter Email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => handleProceed(() => setStep(3))} className="flex-1 rounded-lg" disabled={!phone || !email || !fullName}>Proceed</Button>
+                    <Button
+                      onClick={() => {
+                        const e1 = vl.phone(phone), e2 = vl.fullName(fullName), e3 = vl.email(email);
+                        if (e1 || e2 || e3) { touchField("phone", e1); touchField("fullName", e2); touchField("email", e3); return; }
+                        handleProceed(() => setStep(3));
+                      }}
+                      className="flex-1 rounded-lg"
+                      disabled={!phone || !email || !fullName || hasErr("phone", "fullName", "email")}
+                    >
+                      Proceed
+                    </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
                 </div>
@@ -2004,19 +2312,48 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">User ID</label>
-                    <Input placeholder="Enter User ID" value={bettingUserId} onChange={(e) => setBettingUserId(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your betting platform User ID"
+                      value={bettingUserId}
+                      onChange={(e) => { setBettingUserId(e.target.value); if (errors.bettingUserId) touchField("bettingUserId", vl.bettingUserId(e.target.value)); }}
+                      onBlur={() => touchField("bettingUserId", vl.bettingUserId(bettingUserId))}
+                      className={`rounded-lg ${errors.bettingUserId ? "border-destructive" : ""}`}
+                    />
+                    <Err field="bettingUserId" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Full Name</label>
-                    <Input placeholder="Enter your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); if (errors.fullName) touchField("fullName", vl.fullName(e.target.value)); }}
+                      onBlur={() => touchField("fullName", vl.fullName(fullName))}
+                      className={`rounded-lg ${errors.fullName ? "border-destructive" : ""}`}
+                    />
+                    <Err field="fullName" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Email Address</label>
-                    <Input placeholder="Enter your email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter your email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errors.email) touchField("email", vl.email(e.target.value)); }}
+                      onBlur={() => touchField("email", vl.email(email))}
+                      className={`rounded-lg ${errors.email ? "border-destructive" : ""}`}
+                    />
+                    <Err field="email" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-semibold text-foreground">Enter Amount</label>
-                    <Input placeholder="Enter Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg" />
+                    <Input
+                      placeholder="Enter Amount"
+                      value={amount}
+                      onChange={(e) => { setAmount(e.target.value); if (errors.amount) touchField("amount", vl.amount(e.target.value, 100)); }}
+                      onBlur={() => touchField("amount", vl.amount(amount, 100))}
+                      className={`rounded-lg ${errors.amount ? "border-destructive" : ""}`}
+                    />
+                    <Err field="amount" />
                   </div>
                   <AmountChips options={bettingAmountOptions} value={amount} onChange={setAmount} />
                   <PriceDisplay amount={amount} />
@@ -2025,7 +2362,22 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Input placeholder="Enter Referral Code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="rounded-lg" />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button onClick={() => handleProceed(() => setStep(2))} className="flex-1 rounded-lg" disabled={!bettingUserId || !amount || !email || !fullName}>Next</Button>
+                    <Button
+                      onClick={() => {
+                        const e1 = vl.bettingUserId(bettingUserId), e2 = vl.fullName(fullName);
+                        const e3 = vl.email(email), e4 = vl.amount(amount, 100);
+                        if (e1 || e2 || e3 || e4) {
+                          touchField("bettingUserId", e1); touchField("fullName", e2);
+                          touchField("email", e3); touchField("amount", e4);
+                          return;
+                        }
+                        handleProceed(() => setStep(2));
+                      }}
+                      className="flex-1 rounded-lg"
+                      disabled={!bettingUserId || !amount || !email || !fullName || hasErr("bettingUserId", "fullName", "email", "amount")}
+                    >
+                      Next
+                    </Button>
                     <Button variant="outline" onClick={handleClose} className="rounded-lg px-8">Close</Button>
                   </div>
                 </div>
@@ -2207,6 +2559,153 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                     <Button variant="outline" onClick={() => setStep(step - 1)} className="rounded-lg px-8">Go Back</Button>
                   </div>
                 </div>
+              </StepTransition>
+            )}
+
+            {/* ==================== PAYMENT STEP (shared) ==================== */}
+            {step === confirmStepNum + 1 && (
+              <StepTransition stepKey={`payment-${type}`}>
+                {verifyingPayment ? (
+                  /* ── Verification loading screen ── */
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center justify-center py-10 gap-8"
+                  >
+                    {/* Pulsing ring + lock icon */}
+                    <div className="relative flex items-center justify-center">
+                      <motion.div
+                        className="absolute h-24 w-24 rounded-full bg-primary/10"
+                        animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0.2, 0.6] }}
+                        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                      <motion.div
+                        className="absolute h-16 w-16 rounded-full bg-primary/20"
+                        animate={{ scale: [1, 1.15, 1], opacity: [0.8, 0.3, 0.8] }}
+                        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+                      />
+                      <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30">
+                        <Loader2 className="h-6 w-6 text-primary-foreground animate-spin" />
+                      </div>
+                    </div>
+
+                    {/* Status steps ticking in */}
+                    <div className="w-full space-y-4">
+                      {[
+                        { label: "Connecting to your bank", stage: 1 },
+                        { label: "Verifying your transfer", stage: 2 },
+                        { label: "Confirming payment", stage: 3 },
+                      ].map(({ label, stage }) => (
+                        <motion.div
+                          key={label}
+                          className="flex items-center gap-3"
+                          initial={{ opacity: 0, x: 16 }}
+                          animate={{ opacity: verifyStage >= stage - 1 ? 1 : 0.25, x: 0 }}
+                          transition={{ duration: 0.35 }}
+                        >
+                          <motion.div
+                            className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-300 ${verifyStage >= stage
+                              ? "bg-green-500 border-green-500"
+                              : verifyStage === stage - 1
+                                ? "border-primary bg-primary/10"
+                                : "border-border bg-muted"
+                              }`}
+                          >
+                            {verifyStage >= stage ? (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                              >
+                                <Check className="h-3.5 w-3.5 text-white" />
+                              </motion.div>
+                            ) : verifyStage === stage - 1 ? (
+                              <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                            ) : null}
+                          </motion.div>
+                          <span className={`text-sm font-medium transition-colors duration-300 ${verifyStage >= stage ? "text-foreground" : "text-muted-foreground"
+                            }`}>
+                            {label}{verifyStage >= stage ? "" : "..."}
+                          </span>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground text-center">
+                      Please don't close this screen
+                    </p>
+                  </motion.div>
+                ) : (
+                  /* ── Normal payment details ── */
+                  <div className="space-y-5">
+                    <h3 className="text-center text-sm font-bold uppercase tracking-wider text-foreground">Complete Payment</h3>
+
+                    {/* Instructions */}
+                    <ol className="space-y-2 text-sm text-muted-foreground list-none">
+                      <li className="flex items-start gap-2"><span className="font-bold text-foreground">1.</span> Open your bank App</li>
+                      <li className="flex items-start gap-2"><span className="font-bold text-foreground">2.</span> Copy the Account below and transfer exact amount</li>
+                      <li className="flex items-start gap-2"><span className="font-bold text-foreground">3.</span> Click "I've Paid" once you have sent the money</li>
+                    </ol>
+
+                    {/* Bank details card */}
+                    <div className="rounded-2xl bg-muted/50 border border-border divide-y divide-border overflow-hidden">
+                      {/* Amount */}
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Amount</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-primary">N{(amount || "0").replace(/[₦N,\s]/g, "")}</span>
+                          <button onClick={() => copyToClipboard((amount || "0").replace(/[₦N,\s]/g, ""), "amount")} className="text-muted-foreground hover:text-foreground transition-colors">
+                            {copiedField === "amount" ? <Check className="h-4 w-4 text-green-500" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                          </button>
+                        </div>
+                      </div>
+                      {/* Bank */}
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Bank</span>
+                        <span className="text-sm font-semibold text-foreground">Sendflow</span>
+                      </div>
+                      {/* Account */}
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Account</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-primary">ON47584292</span>
+                          <button onClick={() => copyToClipboard("ON47584292", "account")} className="text-muted-foreground hover:text-foreground transition-colors">
+                            {copiedField === "account" ? <Check className="h-4 w-4 text-green-500" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                          </button>
+                        </div>
+                      </div>
+                      {/* Account Name */}
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Account name</span>
+                        <span className="text-sm font-semibold text-foreground">Sendflow Charles Avis</span>
+                      </div>
+                      {/* Reference */}
+                      <div className="flex items-start justify-between px-4 py-3 gap-3">
+                        <span className="text-sm text-muted-foreground flex-shrink-0">Reference</span>
+                        <div className="flex items-start gap-2 min-w-0">
+                          <span className="text-sm font-bold text-primary text-right break-all">{paymentRef.current}</span>
+                          <button onClick={() => copyToClipboard(paymentRef.current, "ref")} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mt-0.5">
+                            {copiedField === "ref" ? <Check className="h-4 w-4 text-green-500" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* I've Paid CTA */}
+                    <Button
+                      onClick={handleIvePaid}
+                      className="w-full rounded-full py-6 text-base font-bold"
+                    >
+                      I've Paid
+                    </Button>
+
+                    {/* Secured by fuspay */}
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground pt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      Secured by <img src={heroLogo} alt="fuspay" className="h-5 opacity-70 inline-block ml-0.5" />
+                    </div>
+                  </div>
+                )}
               </StepTransition>
             )}
 

@@ -8,7 +8,7 @@ const Navbar = () => {
       <div className="container mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <Link to="/">
-            <img src={logo} alt="ShopsOnline" className="h-8" />
+            <img src={logo} alt="ShopsOnline" className="h-12" />
           </Link>
         </div>
 

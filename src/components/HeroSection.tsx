@@ -56,7 +56,7 @@ const HeroSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}
         >
-          <img src={heroLogo} alt="ShopsOnline" className="h-6 brightness-0 invert" />
+          <img src={heroLogo} alt="ShopsOnline" className="h-10 brightness-0 invert" />
         </motion.div>
 
         {/* Bottom content */}

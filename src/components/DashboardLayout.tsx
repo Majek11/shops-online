@@ -40,10 +40,9 @@ const SidebarNav = ({ onNavigate }: { onNavigate?: () => void }) => (
         end={item.end}
         onClick={onNavigate}
         className={({ isActive }) =>
-          `flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-            isActive
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          `flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isActive
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`
         }
       >
@@ -63,10 +62,9 @@ const SidebarNav = ({ onNavigate }: { onNavigate?: () => void }) => (
         to={item.to}
         onClick={onNavigate}
         className={({ isActive }) =>
-          `flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-            isActive
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          `flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isActive
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`
         }
       >
@@ -98,7 +96,7 @@ const DashboardLayout = () => {
       <aside className="hidden md:flex w-[240px] flex-col border-r border-border bg-background fixed top-0 left-0 h-screen z-30">
         <div className="p-6 pb-4">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="ShopsOnline" className="h-10" />
+            <img src={logo} alt="ShopsOnline" className="h-14" />
           </div>
         </div>
         <SidebarNav />
@@ -117,7 +115,7 @@ const DashboardLayout = () => {
             </SheetTrigger>
             <SheetContent side="left" className="w-[260px] p-0 pt-6">
               <div className="px-6 pb-4">
-                <img src={logo} alt="ShopsOnline" className="h-10" />
+                <img src={logo} alt="ShopsOnline" className="h-14" />
               </div>
               <SidebarNav onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
@@ -153,9 +151,8 @@ const DashboardLayout = () => {
                     notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 ${
-                          !n.read ? "bg-primary/5" : ""
-                        }`}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 ${!n.read ? "bg-primary/5" : ""
+                          }`}
                       >
                         <div className="mt-0.5">{notifIcon(n.type)}</div>
                         <div className="flex-1 min-w-0">

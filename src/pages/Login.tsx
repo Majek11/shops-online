@@ -163,7 +163,7 @@ export default function Login() {
                 {/* Logo */}
                 <div className="mb-8 flex justify-center">
                     <Link to="/">
-                        <img src={logo} alt="ShopsOnline" className="h-9" />
+                        <img src={logo} alt="ShopsOnline" className="h-14" />
                     </Link>
                 </div>
 
