@@ -605,6 +605,27 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   const [step, setStep] = useState(1);
   // Stable reference for this modal session
   const paymentRef = useRef(`ORD-${crypto.randomUUID().slice(0, 23)}-${Date.now()}`);
+  // Ref for the scrollable form container so we can scroll focused inputs into view
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // On mobile, when the keyboard opens it shrinks the viewport.
+  // This ensures the focused input (and everything below it including the button)
+  // scrolls into view inside our custom overflow-y-auto container.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) {
+        // Small delay lets the keyboard finish animating in before we scroll
+        setTimeout(() => {
+          target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }, 320);
+      }
+    };
+    container.addEventListener("focusin", handleFocus);
+    return () => container.removeEventListener("focusin", handleFocus);
+  }, [open]);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [verifyStage, setVerifyStage] = useState(0); // 0=idle, 1,2,3=stages done
@@ -1222,7 +1243,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
         aria-describedby={undefined}
-        className="fixed right-0 top-0 md:top-4 md:bottom-4 left-auto translate-x-0 translate-y-0 max-w-7xl w-full md:w-[95vw] p-0 md:p-4 gap-0 overflow-hidden rounded-none md:rounded-2xl h-screen md:h-[calc(100vh-2rem)] max-h-screen md:max-h-[calc(100vh-2rem)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 border-r-0 [&>button:last-of-type]:hidden"
+        className="fixed right-0 top-0 md:top-4 md:bottom-4 left-auto translate-x-0 translate-y-0 max-w-7xl w-full md:w-[95vw] p-0 md:p-4 gap-0 overflow-hidden rounded-none md:rounded-2xl h-[100dvh] md:h-[calc(100vh-2rem)] max-h-[100dvh] md:max-h-[calc(100vh-2rem)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 border-r-0 [&>button:last-of-type]:hidden"
       >
         <DialogTitle className="sr-only">{config.title}</DialogTitle>
         <DialogDescription className="sr-only">{config.subtitle}</DialogDescription>
@@ -1233,10 +1254,10 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
         >
           <X className="h-5 w-5 text-gray-700" />
         </button>
-        <div className="flex flex-col md:flex-row h-full overflow-hidden rounded-none md:rounded-2xl">
+        <div className="flex flex-col md:flex-row h-full min-h-0 overflow-hidden rounded-none md:rounded-2xl">
           <PromoSidebar />
 
-          <div className="flex-1 p-6 pt-16 md:p-10 overflow-y-auto">
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 p-6 pt-16 md:p-10 overflow-y-auto overscroll-contain pb-10 md:pb-10">
             <div className="flex items-start justify-between mb-1">
               <h2 className="text-xl font-bold text-foreground">{config.title}</h2>
               <Select defaultValue="nigeria">
