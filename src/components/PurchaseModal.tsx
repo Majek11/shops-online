@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, Plus, PartyPopper, X, Loader2, Bookmark, BookmarkCheck, Users, UserPlus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import slide1 from "@/assets/slide-1.png";
-import slide2 from "@/assets/slide-2.png";
-import slide3 from "@/assets/slide-3.png";
+import slide1 from "@/assets/slide-new-1.png";
+import slide2 from "@/assets/slide-new-2.png";
+import slide3 from "@/assets/slide-new-3.png";
 import heroLogo from "@/assets/shopsonline-logo.svg";
 import foodOfferImg from "@/assets/food-offer.jpg";
 import mtnLogo from "@/assets/mtn.jpg";
@@ -28,6 +28,9 @@ import {
   validatePhoneNumber,
   validateAccount,
   guestRegister,
+  createOrder,
+  verifyOrder,
+  toE164,
   type Operator,
   type Product,
   type PaymentPlan,
@@ -628,7 +631,9 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
   }, [open]);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [isOrdering, setIsOrdering] = useState(false);
   const [verifyStage, setVerifyStage] = useState(0); // 0=idle, 1,2,3=stages done
+  const [paymentDetails, setPaymentDetails] = useState<{ bankName?: string, accountName?: string, accountNumber?: string, amount?: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   /* ── Validation helpers ── */
@@ -699,22 +704,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     });
   };
 
-  const handleIvePaid = () => {
-    setVerifyingPayment(true);
-    setVerifyStage(0);
-    // Stage 1 — Connecting to bank
-    setTimeout(() => setVerifyStage(1), 800);
-    // Stage 2 — Verifying your transfer
-    setTimeout(() => setVerifyStage(2), 2000);
-    // Stage 3 — Confirming payment
-    setTimeout(() => setVerifyStage(3), 3200);
-    // Done — go to success
-    setTimeout(() => {
-      setVerifyingPayment(false);
-      setVerifyStage(0);
-      setStep(successStep);
-    }, 4200);
-  };
+
   const [phone, setPhone] = useState("");
   const [network, setNetwork] = useState("");
   const [amount, setAmount] = useState("");
@@ -1096,10 +1086,144 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     setNetworks([]); setDataTypes([]); setBillers([]); setPaymentPlans([]);
     setPackages([]); setProviders([]); setValidatedAccount(null);
     setPhoneValidation(null);
+    setPaymentDetails(null);
     setErrors({});
   };
 
   const handleClose = () => { reset(); onClose(); };
+
+  const handleConfirmOrder = async () => {
+    setIsOrdering(true);
+    clearErr("api");
+
+    let userId = "guest";
+    try {
+      const userStr = localStorage.getItem("billstack_user");
+      if (userStr) userId = JSON.parse(userStr).id || "guest";
+    } catch { }
+
+    // Build the items array properly
+    const items = [];
+
+    if (isBulk && (type === "airtime" || type === "data")) {
+      const rows = (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(
+        (r) => r.phone && r.network && r.amount
+      );
+      rows.forEach(r => {
+        items.push({
+          productId: type === "data" ? plan : "180", // assuming 180 is default airtime product ID if nothing chosen
+          operatorId: r.network,
+          msisdn: toE164(r.phone),
+          amount: parseFloat(r.amount.replace(/[₦N$,\s]/g, "")),
+          countryCode: "NG"
+        });
+      });
+    } else {
+      let productId = "180";
+      let operatorId = network;
+      let msisdnPath = phone;
+
+      if (type === "data") productId = plan;
+      if (type === "electricity") {
+        operatorId = billerName;
+        msisdnPath = meterNumber;
+      }
+      if (type === "cabletv") {
+        operatorId = cableProvider;
+        productId = cablePlan;
+        msisdnPath = decoderNumber;
+      }
+      if (type === "betting") {
+        operatorId = bettingPlatform;
+        msisdnPath = bettingUserId;
+      }
+
+      items.push({
+        productId,
+        operatorId: operatorId || "1", // Fallback to 1 to prevent failing validations if empty
+        msisdn: toE164(msisdnPath),
+        amount: parseFloat(amount.replace(/[₦N$,\s]/g, "")),
+        countryCode: "NG"
+      });
+    }
+
+    const payload = {
+      userId,
+      requestReference: paymentRef.current,
+      referralCode: coupon || "",
+      items
+    };
+
+    const res = await createOrder(payload);
+    setIsOrdering(false);
+
+    if (res.success) {
+      if (res.data?.transaction?.providerResponse) {
+        setPaymentDetails({
+          ...res.data.transaction.providerResponse,
+          amount: res.data.transaction.amount?.toString()
+        });
+      } else {
+        setPaymentDetails(null);
+      }
+      setStep(step + 1); // move to payment screen
+    } else {
+      setErr("api", res.message || "Failed to create order. Please check your inputs.");
+      // Auto-dismiss API error mapping after 5s
+      setTimeout(() => clearErr("api"), 5000);
+    }
+  };
+
+  const handleIvePaid = async () => {
+    setVerifyingPayment(true);
+    setVerifyStage(0); // initial 'Connecting to bank...'
+
+    // Safety timeout - if endless pending, bail after 30s
+    let attempts = 0;
+    const maxAttempts = 10;
+    const intervalTime = 3000;
+
+    const poll = async () => {
+      attempts++;
+      if (attempts >= 3) setVerifyStage(1); // 'Verifying your transfer...'
+      if (attempts >= 6) setVerifyStage(2); // 'Confirming payment...'
+
+      const res = await verifyOrder(paymentRef.current);
+
+      // Assume success if the API returns explicitly or if we run out of retries without explicit FAILED
+      // Usually real APIs return "SUCCESS", "PENDING", or "FAILED". Modify condition based on actual response payload.
+      if (res.success && res.data?.status === "SUCCESS") {
+        setVerifyStage(3);
+        setTimeout(() => {
+          setVerifyingPayment(false);
+          setVerifyStage(0);
+          setStep(successStep);
+        }, 1200);
+        return;
+      }
+
+      if (res.data?.status === "FAILED") {
+        setVerifyingPayment(false);
+        setVerifyStage(0);
+        setErr("api", "Payment verification failed. Please contact support.");
+        setTimeout(() => clearErr("api"), 5000);
+        return;
+      }
+
+      // If pending and have limits left
+      if (attempts < maxAttempts) {
+        setTimeout(poll, intervalTime);
+      } else {
+        // Fallback or give up
+        setVerifyingPayment(false);
+        setVerifyStage(0);
+        setErr("api", "Taking too long to verify. Your transaction may still be processing.");
+        setTimeout(() => clearErr("api"), 5000);
+      }
+    };
+
+    poll();
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -1138,7 +1262,26 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
     const selectedEsimPkg = packages.find((p) => p.id === esimPackage);
 
     switch (type) {
-      case "airtime":
+      case "airtime": {
+        const validBulk = (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(
+          (r) => r.phone && r.network && r.amount
+        );
+        if (isBulk && validBulk.length > 0) {
+          const totalAmt = validBulk.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+          return [
+            { label: "Name:", value: fullName || "—" },
+            { label: "Email:", value: email || "—" },
+            { label: "Recipients:", value: `${validBulk.length} numbers` },
+            ...validBulk.map((r, i) => ({
+              label: `Recipient ${i + 1}:`,
+              value: `${r.phone} · ${networks.find(n => n.id === r.network)?.name || r.network} · ₦${r.amount}`,
+            })),
+            { label: "Total Amount:", value: `₦${totalAmt.toLocaleString("en-NG")}` },
+            { label: "Stamp Duty:", value: "₦25.00" },
+            { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+            { label: "Loyalty Bonus:", value: calcBonus(validBulk[0].amount) > 0 ? `+₦${calcBonus(validBulk[0].amount).toLocaleString("en-NG")} (1% on recipient 1)` : "—" },
+          ];
+        }
         return [
           { label: "Name:", value: fullName || "—" },
           { label: "Email:", value: email || "—" },
@@ -1149,7 +1292,28 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
           { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
-      case "data":
+      }
+      case "data": {
+        const validBulkData = (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(
+          (r) => r.phone && r.network && r.amount
+        );
+        if (isBulk && validBulkData.length > 0) {
+          const totalAmt = validBulkData.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+          return [
+            { label: "Name:", value: fullName || "—" },
+            { label: "Email:", value: email || "—" },
+            { label: "Data Plan:", value: selectedPlan?.name || plan || "—" },
+            { label: "Recipients:", value: `${validBulkData.length} numbers` },
+            ...validBulkData.map((r, i) => ({
+              label: `Recipient ${i + 1}:`,
+              value: `${r.phone} · ${networks.find(n => n.id === r.network)?.name || r.network} · ₦${r.amount}`,
+            })),
+            { label: "Total Amount:", value: `₦${totalAmt.toLocaleString("en-NG")}` },
+            { label: "Stamp Duty:", value: "₦25.00" },
+            { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
+            { label: "Loyalty Bonus:", value: calcBonus(validBulkData[0].amount) > 0 ? `+₦${calcBonus(validBulkData[0].amount).toLocaleString("en-NG")} (1% on recipient 1)` : "—" },
+          ];
+        }
         return [
           { label: "Name:", value: fullName || "—" },
           { label: "Email:", value: email || "—" },
@@ -1161,6 +1325,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
           { label: "Ref No:", value: "rf" + Math.random().toString(36).slice(2, 8) },
           { label: "Loyalty Bonus:", value: calcBonus(amount) > 0 ? `+₦${calcBonus(amount).toLocaleString("en-NG")} (1%)` : "—" },
         ];
+      }
       case "electricity":
         return [
           { label: "Name:", value: fullName || "—" },
@@ -2559,6 +2724,21 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   <h3 className="mb-4 text-center text-sm font-bold uppercase tracking-wider text-foreground">
                     Confirm Transaction
                   </h3>
+
+                  {/* Inline API Error Display */}
+                  <AnimatePresence>
+                    {errors.api && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive font-medium border border-destructive/20 text-center"
+                      >
+                        {errors.api}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <div className="border-t border-dashed border-border" />
                   <div className="space-y-5 py-5">
                     {getConfirmRows().map((row, i) => (
@@ -2576,8 +2756,11 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                   </div>
                   <div className="border-t border-dashed border-border" />
                   <div className="flex gap-3 pt-6">
-                    <Button onClick={() => setStep(step + 1)} className="flex-1 rounded-lg">Confirm</Button>
-                    <Button variant="outline" onClick={() => setStep(step - 1)} className="rounded-lg px-8">Go Back</Button>
+                    <Button onClick={handleConfirmOrder} disabled={isOrdering} className="flex-1 rounded-lg">
+                      {isOrdering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {isOrdering ? "Creating Order..." : "Confirm"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setStep(step - 1)} disabled={isOrdering} className="rounded-lg px-8">Go Back</Button>
                   </div>
                 </div>
               </StepTransition>
@@ -2674,8 +2857,8 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm text-muted-foreground">Amount</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-primary">N{(amount || "0").replace(/[₦N,\s]/g, "")}</span>
-                          <button onClick={() => copyToClipboard((amount || "0").replace(/[₦N,\s]/g, ""), "amount")} className="text-muted-foreground hover:text-foreground transition-colors">
+                          <span className="text-sm font-bold text-primary">N{paymentDetails?.amount || (isBulk ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).reduce((sum, r) => sum + parseFloat(r.amount.replace(/[₦N$,\s]/g, "") || "0"), 0).toString() : amount || "0").replace(/[₦N,\s]/g, "")}</span>
+                          <button onClick={() => copyToClipboard(paymentDetails?.amount || (isBulk ? (bulkNumbers as { phone: string; network: string; amount: string }[]).filter(r => r.phone && r.network && r.amount).reduce((sum, r) => sum + parseFloat(r.amount.replace(/[₦N$,\s]/g, "") || "0"), 0).toString() : amount || "0").replace(/[₦N,\s]/g, ""), "amount")} className="text-muted-foreground hover:text-foreground transition-colors">
                             {copiedField === "amount" ? <Check className="h-4 w-4 text-green-500" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
                           </button>
                         </div>
@@ -2683,14 +2866,14 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       {/* Bank */}
                       <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm text-muted-foreground">Bank</span>
-                        <span className="text-sm font-semibold text-foreground">Sendflow</span>
+                        <span className="text-sm font-semibold text-foreground">{paymentDetails?.bankName || "Sendflow"}</span>
                       </div>
                       {/* Account */}
                       <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm text-muted-foreground">Account</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-primary">ON47584292</span>
-                          <button onClick={() => copyToClipboard("ON47584292", "account")} className="text-muted-foreground hover:text-foreground transition-colors">
+                          <span className="text-sm font-bold text-primary">{paymentDetails?.accountNumber || "ON47584292"}</span>
+                          <button onClick={() => copyToClipboard(paymentDetails?.accountNumber || "ON47584292", "account")} className="text-muted-foreground hover:text-foreground transition-colors">
                             {copiedField === "account" ? <Check className="h-4 w-4 text-green-500" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
                           </button>
                         </div>
@@ -2698,7 +2881,7 @@ const PurchaseModal = ({ open, onClose, type }: PurchaseModalProps) => {
                       {/* Account Name */}
                       <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm text-muted-foreground">Account name</span>
-                        <span className="text-sm font-semibold text-foreground">Sendflow Charles Avis</span>
+                        <span className="text-sm font-semibold text-foreground">{paymentDetails?.accountName || "Sendflow Charles Avis"}</span>
                       </div>
                       {/* Reference */}
                       <div className="flex items-start justify-between px-4 py-3 gap-3">

@@ -12,7 +12,7 @@ import airtimeImg from "@/assets/airtime-purchase.png";
 import dataImg from "@/assets/data-purchase.png";
 import electricityImg from "@/assets/electricity-purchase.png";
 import bettingImg from "@/assets/betting.png";
-import giftCardsImg from "@/assets/gift-cards.png";
+import giftCardsImg from "@/assets/new-gift-card.png";
 import esimImg from "@/assets/esim.png";
 import cableTvImg from "@/assets/cable-tv.png";
 

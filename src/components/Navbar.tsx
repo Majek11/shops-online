@@ -6,9 +6,9 @@ import { Menu, X } from "lucide-react";
 import logo from "@/assets/shopsonline-logo.svg";
 
 const NAV_LINKS = [
-  { label: "Bills Payment", href: "#" },
+  { label: "Bills Payment", href: "https://www.onshops.online/" },
   { label: "Shops Online", href: "https://www.onshops.online/" },
-  { label: "Create Online Store", href: "#" },
+  { label: "Create Online Store", href: "https://www.onshops.online/create" },
 ];
 
 const Navbar = () => {
@@ -44,8 +44,8 @@ const Navbar = () => {
                 key={link.label}
                 href={link.href}
                 className={`text-sm font-medium transition-colors ${link.label === "Bills Payment"
-                    ? "border-b-2 border-primary pb-1 text-primary font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
+                  ? "border-b-2 border-primary pb-1 text-primary font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
                   }`}
               >
                 {link.label}
@@ -129,8 +129,8 @@ const Navbar = () => {
                     transition={{ delay: 0.07 + i * 0.07 }}
                     onClick={() => setMenuOpen(false)}
                     className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${link.label === "Bills Payment"
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-foreground hover:bg-muted"
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-foreground hover:bg-muted"
                       }`}
                   >
                     {link.label}

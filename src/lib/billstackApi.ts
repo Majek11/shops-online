@@ -201,6 +201,16 @@ export async function registerUser(payload: RegisterUserPayload): Promise<ApiRes
   }
 }
 
+// Convert local Nigerian format (0XXXXXXXXXX) to E.164 (+234XXXXXXXXXX)
+// The API rejects local format — it requires E.164
+export const toE164 = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("234") && digits.length === 13) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+234${digits.slice(1)}`;
+  if (digits.length >= 10) return `+${digits}`; // already looks international
+  return raw; // can't safely convert — send as-is
+};
+
 /**
  * Silently register a user during checkout.
  * Requires email, phone, and full name.
@@ -210,7 +220,7 @@ export async function guestRegister(email: string, phone: string, fullName: stri
   const firstName = nameParts[0] || "Guest";
   const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "User";
 
-  const payload = { firstName, lastName, email, phone, country: "NG" };
+  const payload = { firstName, lastName, email, phone: toE164(phone), country: "NG" };
   try {
     const response = await api.post('/auth/register/user', payload);
     const envelope = response.data;
@@ -582,6 +592,55 @@ export async function getESimPackages(providerId: string): Promise<ApiResponse<P
     return {
       success: false,
       message: error.response?.data?.message || 'Failed to fetch eSIM packages'
+    };
+  }
+}
+
+// ─── Orders (Fulfillment) ───────────────────────────────────────────────────
+
+export interface OrderItem {
+  productId: string;
+  operatorId: string;
+  msisdn: string;
+  amount: number;
+  countryCode: string;
+}
+
+export interface CreateOrderPayload {
+  userId: string;
+  requestReference: string;
+  referralCode?: string;
+  items: OrderItem[];
+}
+
+export async function createOrder(payload: CreateOrderPayload): Promise<ApiResponse> {
+  try {
+    const response = await api.post('/public/orders', payload);
+    return {
+      success: response.data.status === true,
+      data: response.data.data || response.data,
+      message: response.data.message
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Failed to create order'
+    };
+  }
+}
+
+export async function verifyOrder(orderId: string): Promise<ApiResponse> {
+  try {
+    const response = await api.get(`/public/orders/${orderId}`);
+    return {
+      success: response.data.status === true,
+      data: response.data.data || response.data,
+      message: response.data.message
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Failed to verify order status'
     };
   }
 }
